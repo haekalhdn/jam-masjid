@@ -121,11 +121,24 @@ function getNextIqamah(date: Date, prayerSchedule: Prayer[]) {
   };
 }
 
+function isPrayerModeActive(date: Date, prayerSchedule: Prayer[]) {
+  const { hours, minutes, seconds } = getTimeParts(date);
+  const currentSeconds = hours * 3600 + minutes * 60 + seconds;
+  const prayerModeDuration = 10 * 60;
+
+  return prayerSchedule.some((prayer) => {
+    const [iqamahHour, iqamahMinute] = prayer.iqamah.split(":").map(Number);
+    const iqamahSeconds = iqamahHour * 3600 + iqamahMinute * 60;
+    return currentSeconds >= iqamahSeconds && currentSeconds < iqamahSeconds + prayerModeDuration;
+  });
+}
+
 export default function Home() {
   const [now, setNow] = useState<Date | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [prayerSchedule, setPrayerSchedule] = useState<Prayer[]>(FALLBACK_SCHEDULE);
   const [activeSlide, setActiveSlide] = useState(0);
+  const prayerMode = now ? isPrayerModeActive(now, prayerSchedule) : false;
 
   useEffect(() => {
     const updateClock = () => setNow(new Date());
@@ -143,13 +156,14 @@ export default function Home() {
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (prayerMode) return;
     const slideDurations = [12000, 12000, 60000];
     const slideTimer = window.setTimeout(
       () => setActiveSlide((current) => (current + 1) % slideDurations.length),
       slideDurations[activeSlide],
     );
     return () => window.clearTimeout(slideTimer);
-  }, [activeSlide]);
+  }, [activeSlide, prayerMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -213,7 +227,7 @@ export default function Home() {
   };
 
   return (
-    <main className="display-shell">
+    <main className={"display-shell" + (prayerMode ? " prayer-mode" : "")}>
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
 
@@ -285,7 +299,7 @@ export default function Home() {
 
           <div className={"carousel-slide video-slide" + (activeSlide === 2 ? " active" : "")} aria-hidden={activeSlide !== 2}>
             <div className="video-player">
-              {activeSlide === 2 && (
+              {activeSlide === 2 && !prayerMode && (
                 <iframe
                   src="https://www.youtube-nocookie.com/embed/X6AeZWXq_pE?autoplay=1&mute=1&loop=1&playlist=X6AeZWXq_pE&playsinline=1&rel=0"
                   title="Pengurus DKM Alhidayah 2026–2029"

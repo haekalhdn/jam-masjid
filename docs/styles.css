@@ -78,6 +78,22 @@ button {
 }
 
 .topbar,
+.hero-grid,
+.schedule-section,
+.announcement-bar {
+  transition: opacity 700ms ease, visibility 700ms ease;
+}
+
+.display-shell.prayer-mode .topbar,
+.display-shell.prayer-mode .hero-grid,
+.display-shell.prayer-mode .schedule-section,
+.display-shell.prayer-mode .announcement-bar {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.topbar,
 .brand,
 .topbar-actions,
 .live-status,
@@ -774,6 +790,10 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .topbar,
+  .hero-grid,
+  .schedule-section,
+  .announcement-bar,
   .carousel-slide {
     transition: none;
   }

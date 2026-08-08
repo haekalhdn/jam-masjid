@@ -9,6 +9,7 @@ let prayerSchedule = [
   { name: "Maghrib", adhan: "17:58", iqamah: "18:05" },
   { name: "Isya", adhan: "19:09", iqamah: "19:16" },
 ];
+let prayerMode = false;
 
 const dateKeyFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: TIME_ZONE,
@@ -91,6 +92,18 @@ function getNextIqamah(date) {
   };
 }
 
+function isPrayerModeActive(date) {
+  const { hour, minute, second } = getTimeParts(date);
+  const currentSeconds = hour * 3600 + minute * 60 + second;
+  const prayerModeDuration = 10 * 60;
+
+  return prayerSchedule.some((prayer) => {
+    const [iqamahHour, iqamahMinute] = prayer.iqamah.split(":").map(Number);
+    const iqamahSeconds = iqamahHour * 3600 + iqamahMinute * 60;
+    return currentSeconds >= iqamahSeconds && currentSeconds < iqamahSeconds + prayerModeDuration;
+  });
+}
+
 function updatePrayerCards() {
   document.querySelectorAll(".prayer-card").forEach((card) => {
     const prayer = prayerSchedule.find((item) => item.name === card.dataset.prayer);
@@ -138,6 +151,14 @@ function updateDisplay() {
   const now = new Date();
   const { hour, minute, second } = getTimeParts(now);
   const next = getNextIqamah(now);
+  const prayerModeNow = isPrayerModeActive(now);
+
+  if (prayerModeNow !== prayerMode) {
+    prayerMode = prayerModeNow;
+    document.querySelector(".display-shell").classList.toggle("prayer-mode", prayerMode);
+    updateVideoPlayer(!prayerMode && activeSlide === 2);
+    scheduleNextSlide();
+  }
 
   document.querySelector("#clock-hour").textContent = String(hour).padStart(2, "0");
   document.querySelector("#clock-minute").textContent = String(minute).padStart(2, "0");
@@ -199,7 +220,7 @@ function updateVideoPlayer(isActive) {
 
 function scheduleNextSlide() {
   window.clearTimeout(slideTimer);
-  if (reducedMotion) return;
+  if (reducedMotion || prayerMode) return;
   slideTimer = window.setTimeout(
     () => showSlide((activeSlide + 1) % carouselSlides.length),
     slideDurations[activeSlide] ?? 12000,
@@ -208,7 +229,7 @@ function scheduleNextSlide() {
 
 function showSlide(index) {
   activeSlide = index;
-  updateVideoPlayer(activeSlide === 2);
+  updateVideoPlayer(!prayerMode && activeSlide === 2);
   carouselSlides.forEach((slide, slideIndex) => {
     const active = slideIndex === activeSlide;
     slide.classList.toggle("active", active);
