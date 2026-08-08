@@ -575,6 +575,14 @@ button {
   font-style: italic;
 }
 
+.section-reminder.simulation {
+  color: var(--gold-bright);
+  font-family: var(--font-geist-sans), Arial, sans-serif;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
 .prayer-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

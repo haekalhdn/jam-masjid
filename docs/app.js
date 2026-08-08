@@ -1,7 +1,11 @@
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.1";
+const APP_VERSION = "2026.08.08.2";
+const pageParams = new URLSearchParams(window.location.search);
+const simulationPrayer = pageParams.get("demo") === "maghrib" ? "Maghrib" : null;
+const simulationRun = pageParams.get("run") || "default";
+const simulationStorageKey = "jam-masjid-demo-maghrib-" + simulationRun;
 
 let prayerSchedule = [
   { name: "Subuh", adhan: "04:46", iqamah: "04:53" },
@@ -72,6 +76,28 @@ function getTimeParts(date) {
       .formatToParts(date)
       .filter((part) => part.type !== "literal")
       .map((part) => [part.type, Number(part.value)]),
+  );
+}
+
+function applySimulation(schedule) {
+  if (!simulationPrayer) return schedule;
+
+  let demoAdhan = window.sessionStorage.getItem(simulationStorageKey);
+  if (!demoAdhan) {
+    const target = new Date(Date.now() + 3 * 60 * 1000);
+    target.setSeconds(0, 0);
+    if (target.getTime() - Date.now() < 3 * 60 * 1000) {
+      target.setMinutes(target.getMinutes() + 1);
+    }
+    const { hour, minute } = getTimeParts(target);
+    demoAdhan = String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+    window.sessionStorage.setItem(simulationStorageKey, demoAdhan);
+  }
+
+  return schedule.map((prayer) =>
+    prayer.name === simulationPrayer
+      ? { ...prayer, adhan: demoAdhan, iqamah: addMinutes(demoAdhan, 7) }
+      : prayer,
   );
 }
 
@@ -169,10 +195,12 @@ async function loadDepokSchedule() {
     if (cached) {
       const parsed = JSON.parse(cached);
       if (parsed.date === dateKey) {
-        prayerSchedule = parsed.schedule.map((prayer) => ({
-          ...prayer,
-          iqamah: addMinutes(prayer.adhan, 7),
-        }));
+        prayerSchedule = applySimulation(
+          parsed.schedule.map((prayer) => ({
+            ...prayer,
+            iqamah: addMinutes(prayer.adhan, 7),
+          })),
+        );
         updatePrayerCards();
         updateDisplay();
       }
@@ -182,7 +210,7 @@ async function loadDepokSchedule() {
     if (!response.ok) throw new Error("Jadwal Depok tidak tersedia");
     const data = await response.json();
 
-    prayerSchedule = scheduleFromApi(data.jadwal);
+    prayerSchedule = applySimulation(scheduleFromApi(data.jadwal));
     window.localStorage.setItem(
       SCHEDULE_CACHE_KEY,
       JSON.stringify({ date: dateKey, schedule: prayerSchedule }),
@@ -200,6 +228,12 @@ const transitionKicker = document.querySelector("#transition-kicker");
 const transitionTitle = document.querySelector("#transition-title");
 const transitionCountdown = document.querySelector("#transition-countdown");
 const transitionMessage = document.querySelector("#transition-message");
+
+if (simulationPrayer) {
+  const reminder = document.querySelector(".section-reminder");
+  reminder.textContent = "MODE SIMULASI • Maghrib dimulai sekitar 3 menit lagi";
+  reminder.classList.add("simulation");
+}
 
 function updateDisplay() {
   const now = new Date();
@@ -325,6 +359,7 @@ carouselDots.forEach((dot) => {
 
 scheduleNextSlide();
 
+prayerSchedule = applySimulation(prayerSchedule);
 updatePrayerCards();
 updateDisplay();
 void loadDepokSchedule();

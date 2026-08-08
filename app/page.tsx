@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.1";
+const APP_VERSION = "2026.08.08.2";
 
 type Prayer = { name: string; adhan: string; iqamah: string };
 type DisplayPhase =
@@ -167,6 +167,7 @@ export default function Home() {
   const [prayerSchedule, setPrayerSchedule] = useState<Prayer[]>(FALLBACK_SCHEDULE);
   const [activeSlide, setActiveSlide] = useState(0);
   const [availableVersion, setAvailableVersion] = useState<string | null>(null);
+  const [isSimulation, setIsSimulation] = useState(false);
   const displayPhase: DisplayPhase = now
     ? getDisplayPhase(now, prayerSchedule)
     : { type: "normal" };
@@ -198,6 +199,37 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false;
+    const pageParams = new URLSearchParams(window.location.search);
+    const simulationPrayer = pageParams.get("demo") === "maghrib" ? "Maghrib" : null;
+    const simulationRun = pageParams.get("run") || "default";
+    const simulationStorageKey = "jam-masjid-demo-maghrib-" + simulationRun;
+
+    setIsSimulation(Boolean(simulationPrayer));
+
+    const applySimulation = (schedule: Prayer[]) => {
+      if (!simulationPrayer) return schedule;
+
+      let demoAdhan = window.sessionStorage.getItem(simulationStorageKey);
+      if (!demoAdhan) {
+        const target = new Date(Date.now() + 3 * 60 * 1000);
+        target.setSeconds(0, 0);
+        if (target.getTime() - Date.now() < 3 * 60 * 1000) {
+          target.setMinutes(target.getMinutes() + 1);
+        }
+        const { hours, minutes } = getTimeParts(target);
+        demoAdhan =
+          String(hours).padStart(2, "0") + ":" + String(minutes).padStart(2, "0");
+        window.sessionStorage.setItem(simulationStorageKey, demoAdhan);
+      }
+
+      return schedule.map((prayer) =>
+        prayer.name === simulationPrayer
+          ? { ...prayer, adhan: demoAdhan, iqamah: addMinutes(demoAdhan, 7) }
+          : prayer,
+      );
+    };
+
+    setPrayerSchedule((current) => applySimulation(current));
 
     const loadSchedule = async () => {
       const dateKey = dateKeyFormatter.format(new Date());
@@ -208,10 +240,12 @@ export default function Home() {
           const parsed = JSON.parse(cached) as { date: string; schedule: Prayer[] };
           if (parsed.date === dateKey && !cancelled) {
             setPrayerSchedule(
+              applySimulation(
               parsed.schedule.map((prayer) => ({
                 ...prayer,
                 iqamah: addMinutes(prayer.adhan, 7),
               })),
+              ),
             );
           }
         }
@@ -223,7 +257,7 @@ export default function Home() {
         const schedule = scheduleFromApi(data.jadwal);
 
         if (!cancelled) {
-          setPrayerSchedule(schedule);
+          setPrayerSchedule(applySimulation(schedule));
           window.localStorage.setItem(
             SCHEDULE_CACHE_KEY,
             JSON.stringify({ date: dateKey, schedule }),
@@ -423,7 +457,11 @@ export default function Home() {
             <p className="eyebrow">JADWAL KOTA DEPOK</p>
             <h2 id="schedule-title">Waktu Sholat</h2>
           </div>
-          <p className="section-reminder">Kemenag RI • Iqomah 7 menit setelah adzan</p>
+          <p className={"section-reminder" + (isSimulation ? " simulation" : "")}>
+            {isSimulation
+              ? "MODE SIMULASI • Maghrib dimulai sekitar 3 menit lagi"
+              : "Kemenag RI • Iqomah 7 menit setelah adzan"}
+          </p>
         </div>
 
         <div className="prayer-grid">
