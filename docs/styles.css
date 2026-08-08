@@ -84,13 +84,81 @@ button {
   transition: opacity 700ms ease, visibility 700ms ease;
 }
 
-.display-shell.prayer-mode .topbar,
-.display-shell.prayer-mode .hero-grid,
-.display-shell.prayer-mode .schedule-section,
-.display-shell.prayer-mode .announcement-bar {
+.display-shell:is(.adhan-mode, .iqamah-countdown-mode, .prayer-mode) .topbar,
+.display-shell:is(.adhan-mode, .iqamah-countdown-mode, .prayer-mode) .hero-grid,
+.display-shell:is(.adhan-mode, .iqamah-countdown-mode, .prayer-mode) .schedule-section,
+.display-shell:is(.adhan-mode, .iqamah-countdown-mode, .prayer-mode) .announcement-bar {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
+}
+
+.transition-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(28px, 5vw, 96px);
+  color: var(--ink);
+  text-align: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(3, 29, 23, 0.62), rgba(2, 16, 13, 0.72));
+  transition: opacity 700ms ease, visibility 700ms ease;
+}
+
+.display-shell:is(.adhan-mode, .iqamah-countdown-mode) .transition-screen {
+  opacity: 1;
+  visibility: visible;
+}
+
+.transition-kicker {
+  margin: 0 0 clamp(12px, 2vh, 24px);
+  color: var(--gold-bright);
+  font-size: clamp(14px, 1.25vw, 24px);
+  font-weight: 800;
+  letter-spacing: 0.28em;
+}
+
+.transition-screen h2 {
+  max-width: 1200px;
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(52px, 6.5vw, 124px);
+  font-weight: 500;
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+.iqamah-countdown-mode .transition-screen h2 {
+  font-size: clamp(38px, 4.2vw, 78px);
+}
+
+.transition-countdown {
+  display: block;
+  margin: clamp(18px, 3vh, 34px) 0;
+  color: var(--gold-bright);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: clamp(112px, 16vw, 300px);
+  font-weight: 360;
+  letter-spacing: -0.06em;
+  line-height: 0.82;
+  text-shadow: 0 18px 55px rgba(0, 0, 0, 0.32);
+}
+
+.transition-countdown[hidden] {
+  display: none;
+}
+
+.transition-message {
+  margin: clamp(18px, 3vh, 32px) 0 0;
+  color: #d3dcd6;
+  font-size: clamp(18px, 1.45vw, 28px);
+  letter-spacing: 0.03em;
 }
 
 .topbar,
@@ -794,6 +862,7 @@ button {
   .hero-grid,
   .schedule-section,
   .announcement-bar,
+  .transition-screen,
   .carousel-slide {
     transition: none;
   }

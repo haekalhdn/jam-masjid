@@ -7,6 +7,11 @@ const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
 
 type Prayer = { name: string; adhan: string; iqamah: string };
+type DisplayPhase =
+  | { type: "normal" }
+  | { type: "adhan"; prayer: Prayer }
+  | { type: "countdown"; prayer: Prayer; secondsRemaining: number }
+  | { type: "prayer"; prayer: Prayer };
 
 const FALLBACK_SCHEDULE: Prayer[] = [
   { name: "Subuh", adhan: "04:46", iqamah: "04:53" },
@@ -121,16 +126,38 @@ function getNextIqamah(date: Date, prayerSchedule: Prayer[]) {
   };
 }
 
-function isPrayerModeActive(date: Date, prayerSchedule: Prayer[]) {
+function getDisplayPhase(date: Date, prayerSchedule: Prayer[]): DisplayPhase {
   const { hours, minutes, seconds } = getTimeParts(date);
   const currentSeconds = hours * 3600 + minutes * 60 + seconds;
+  const adhanNoticeDuration = 30;
   const prayerModeDuration = 10 * 60;
 
-  return prayerSchedule.some((prayer) => {
+  for (const prayer of prayerSchedule) {
+    const [adhanHour, adhanMinute] = prayer.adhan.split(":").map(Number);
     const [iqamahHour, iqamahMinute] = prayer.iqamah.split(":").map(Number);
+    const adhanSeconds = adhanHour * 3600 + adhanMinute * 60;
     const iqamahSeconds = iqamahHour * 3600 + iqamahMinute * 60;
-    return currentSeconds >= iqamahSeconds && currentSeconds < iqamahSeconds + prayerModeDuration;
-  });
+
+    if (currentSeconds >= adhanSeconds && currentSeconds < adhanSeconds + adhanNoticeDuration) {
+      return { type: "adhan", prayer };
+    }
+
+    if (currentSeconds >= adhanSeconds + adhanNoticeDuration && currentSeconds < iqamahSeconds) {
+      return { type: "countdown", prayer, secondsRemaining: iqamahSeconds - currentSeconds };
+    }
+
+    if (currentSeconds >= iqamahSeconds && currentSeconds < iqamahSeconds + prayerModeDuration) {
+      return { type: "prayer", prayer };
+    }
+  }
+
+  return { type: "normal" };
+}
+
+function formatCountdown(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
 }
 
 export default function Home() {
@@ -138,7 +165,9 @@ export default function Home() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [prayerSchedule, setPrayerSchedule] = useState<Prayer[]>(FALLBACK_SCHEDULE);
   const [activeSlide, setActiveSlide] = useState(0);
-  const prayerMode = now ? isPrayerModeActive(now, prayerSchedule) : false;
+  const displayPhase: DisplayPhase = now
+    ? getDisplayPhase(now, prayerSchedule)
+    : { type: "normal" };
 
   useEffect(() => {
     const updateClock = () => setNow(new Date());
@@ -156,14 +185,14 @@ export default function Home() {
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    if (prayerMode) return;
+    if (displayPhase.type !== "normal") return;
     const slideDurations = [12000, 12000, 60000];
     const slideTimer = window.setTimeout(
       () => setActiveSlide((current) => (current + 1) % slideDurations.length),
       slideDurations[activeSlide],
     );
     return () => window.clearTimeout(slideTimer);
-  }, [activeSlide, prayerMode]);
+  }, [activeSlide, displayPhase.type]);
 
   useEffect(() => {
     let cancelled = false;
@@ -217,6 +246,12 @@ export default function Home() {
     [now, prayerSchedule],
   );
   const timeParts = now ? timeFormatter.format(now).replaceAll(".", ":").split(":") : ["--", "--", "--"];
+  const shellModeClass = {
+    normal: "",
+    adhan: " adhan-mode",
+    countdown: " iqamah-countdown-mode",
+    prayer: " prayer-mode",
+  }[displayPhase.type];
 
   const toggleFullscreen = async () => {
     if (document.fullscreenElement) {
@@ -227,9 +262,32 @@ export default function Home() {
   };
 
   return (
-    <main className={"display-shell" + (prayerMode ? " prayer-mode" : "")}>
+    <main className={"display-shell" + shellModeClass}>
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
+
+      {(displayPhase.type === "adhan" || displayPhase.type === "countdown") && (
+        <section className={"transition-screen " + displayPhase.type} aria-live="polite" aria-atomic="true">
+          <p className="transition-kicker">
+            {displayPhase.type === "adhan" ? "WAKTU SHOLAT" : "MENUJU IQOMAH"}
+          </p>
+          <h2>
+            {displayPhase.type === "adhan"
+              ? "Sudah Masuk Waktu " + displayPhase.prayer.name
+              : "Iqomah " + displayPhase.prayer.name}
+          </h2>
+          {displayPhase.type === "countdown" && (
+            <strong className="transition-countdown">
+              {formatCountdown(displayPhase.secondsRemaining)}
+            </strong>
+          )}
+          <p className="transition-message">
+            {displayPhase.type === "adhan"
+              ? "Mari bersiap menunaikan sholat berjamaah."
+              : "Luruskan dan rapatkan shaf."}
+          </p>
+        </section>
+      )}
 
       <header className="topbar">
         <div className="brand">
@@ -299,7 +357,7 @@ export default function Home() {
 
           <div className={"carousel-slide video-slide" + (activeSlide === 2 ? " active" : "")} aria-hidden={activeSlide !== 2}>
             <div className="video-player">
-              {activeSlide === 2 && !prayerMode && (
+              {activeSlide === 2 && displayPhase.type === "normal" && (
                 <iframe
                   src="https://www.youtube-nocookie.com/embed/X6AeZWXq_pE?autoplay=1&mute=1&loop=1&playlist=X6AeZWXq_pE&playsinline=1&rel=0"
                   title="Pengurus DKM Alhidayah 2026–2029"

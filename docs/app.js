@@ -9,7 +9,7 @@ let prayerSchedule = [
   { name: "Maghrib", adhan: "17:58", iqamah: "18:05" },
   { name: "Isya", adhan: "19:09", iqamah: "19:16" },
 ];
-let prayerMode = false;
+let displayMode = "normal";
 
 const dateKeyFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: TIME_ZONE,
@@ -92,16 +92,38 @@ function getNextIqamah(date) {
   };
 }
 
-function isPrayerModeActive(date) {
+function getDisplayPhase(date) {
   const { hour, minute, second } = getTimeParts(date);
   const currentSeconds = hour * 3600 + minute * 60 + second;
+  const adhanNoticeDuration = 30;
   const prayerModeDuration = 10 * 60;
 
-  return prayerSchedule.some((prayer) => {
+  for (const prayer of prayerSchedule) {
+    const [adhanHour, adhanMinute] = prayer.adhan.split(":").map(Number);
     const [iqamahHour, iqamahMinute] = prayer.iqamah.split(":").map(Number);
+    const adhanSeconds = adhanHour * 3600 + adhanMinute * 60;
     const iqamahSeconds = iqamahHour * 3600 + iqamahMinute * 60;
-    return currentSeconds >= iqamahSeconds && currentSeconds < iqamahSeconds + prayerModeDuration;
-  });
+
+    if (currentSeconds >= adhanSeconds && currentSeconds < adhanSeconds + adhanNoticeDuration) {
+      return { type: "adhan", prayer };
+    }
+
+    if (currentSeconds >= adhanSeconds + adhanNoticeDuration && currentSeconds < iqamahSeconds) {
+      return { type: "countdown", prayer, secondsRemaining: iqamahSeconds - currentSeconds };
+    }
+
+    if (currentSeconds >= iqamahSeconds && currentSeconds < iqamahSeconds + prayerModeDuration) {
+      return { type: "prayer", prayer };
+    }
+  }
+
+  return { type: "normal" };
+}
+
+function formatCountdown(totalSeconds) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
 }
 
 function updatePrayerCards() {
@@ -147,17 +169,41 @@ async function loadDepokSchedule() {
   }
 }
 
+const displayShell = document.querySelector(".display-shell");
+const transitionScreen = document.querySelector(".transition-screen");
+const transitionKicker = document.querySelector("#transition-kicker");
+const transitionTitle = document.querySelector("#transition-title");
+const transitionCountdown = document.querySelector("#transition-countdown");
+const transitionMessage = document.querySelector("#transition-message");
+
 function updateDisplay() {
   const now = new Date();
   const { hour, minute, second } = getTimeParts(now);
   const next = getNextIqamah(now);
-  const prayerModeNow = isPrayerModeActive(now);
+  const phase = getDisplayPhase(now);
 
-  if (prayerModeNow !== prayerMode) {
-    prayerMode = prayerModeNow;
-    document.querySelector(".display-shell").classList.toggle("prayer-mode", prayerMode);
-    updateVideoPlayer(!prayerMode && activeSlide === 2);
+  if (phase.type !== displayMode) {
+    displayMode = phase.type;
+    displayShell.classList.remove("adhan-mode", "iqamah-countdown-mode", "prayer-mode");
+    if (displayMode === "adhan") displayShell.classList.add("adhan-mode");
+    if (displayMode === "countdown") displayShell.classList.add("iqamah-countdown-mode");
+    if (displayMode === "prayer") displayShell.classList.add("prayer-mode");
+    updateVideoPlayer(displayMode === "normal" && activeSlide === 2);
     scheduleNextSlide();
+  }
+
+  const showTransition = phase.type === "adhan" || phase.type === "countdown";
+  transitionScreen.setAttribute("aria-hidden", String(!showTransition));
+
+  if (showTransition) {
+    const isAdhan = phase.type === "adhan";
+    transitionKicker.textContent = isAdhan ? "WAKTU SHOLAT" : "MENUJU IQOMAH";
+    transitionTitle.textContent = (isAdhan ? "Sudah Masuk Waktu " : "Iqomah ") + phase.prayer.name;
+    transitionCountdown.hidden = isAdhan;
+    if (!isAdhan) transitionCountdown.textContent = formatCountdown(phase.secondsRemaining);
+    transitionMessage.textContent = isAdhan
+      ? "Mari bersiap menunaikan sholat berjamaah."
+      : "Luruskan dan rapatkan shaf.";
   }
 
   document.querySelector("#clock-hour").textContent = String(hour).padStart(2, "0");
@@ -220,7 +266,7 @@ function updateVideoPlayer(isActive) {
 
 function scheduleNextSlide() {
   window.clearTimeout(slideTimer);
-  if (reducedMotion || prayerMode) return;
+  if (reducedMotion || displayMode !== "normal") return;
   slideTimer = window.setTimeout(
     () => showSlide((activeSlide + 1) % carouselSlides.length),
     slideDurations[activeSlide] ?? 12000,
@@ -229,7 +275,7 @@ function scheduleNextSlide() {
 
 function showSlide(index) {
   activeSlide = index;
-  updateVideoPlayer(!prayerMode && activeSlide === 2);
+  updateVideoPlayer(displayMode === "normal" && activeSlide === 2);
   carouselSlides.forEach((slide, slideIndex) => {
     const active = slideIndex === activeSlide;
     slide.classList.toggle("active", active);

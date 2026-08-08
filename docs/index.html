@@ -9,13 +9,20 @@
       name="description"
       content="Layar informasi waktu sholat dan hitung mundur iqomah Masjid Jami’ Al-Hidayah."
     />
-    <link rel="stylesheet" href="./styles.css?v=9" />
-    <script src="./app.js?v=8" defer></script>
+    <link rel="stylesheet" href="./styles.css?v=10" />
+    <script src="./app.js?v=9" defer></script>
   </head>
   <body>
     <main class="display-shell">
       <div class="ambient ambient-one"></div>
       <div class="ambient ambient-two"></div>
+
+      <section class="transition-screen" aria-live="polite" aria-atomic="true" aria-hidden="true">
+        <p class="transition-kicker" id="transition-kicker">WAKTU SHOLAT</p>
+        <h2 id="transition-title">Sudah Masuk Waktu Sholat</h2>
+        <strong class="transition-countdown" id="transition-countdown" hidden>00:00</strong>
+        <p class="transition-message" id="transition-message">Mari bersiap menunaikan sholat berjamaah.</p>
+      </section>
 
       <header class="topbar">
         <div class="brand">
