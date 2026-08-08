@@ -3,14 +3,50 @@
 import { useEffect, useMemo, useState } from "react";
 
 const TIME_ZONE = "Asia/Jakarta";
+const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
+const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
 
-const prayerSchedule = [
-  { name: "Subuh", adhan: "04:38", iqamah: "04:50" },
-  { name: "Dzuhur", adhan: "11:58", iqamah: "12:10" },
-  { name: "Ashar", adhan: "15:18", iqamah: "15:30" },
-  { name: "Maghrib", adhan: "17:52", iqamah: "18:00" },
-  { name: "Isya", adhan: "19:04", iqamah: "19:15" },
-] as const;
+type Prayer = { name: string; adhan: string; iqamah: string };
+
+const FALLBACK_SCHEDULE: Prayer[] = [
+  { name: "Subuh", adhan: "04:46", iqamah: "04:56" },
+  { name: "Dzuhur", adhan: "12:03", iqamah: "12:13" },
+  { name: "Ashar", adhan: "15:23", iqamah: "15:33" },
+  { name: "Maghrib", adhan: "17:58", iqamah: "18:05" },
+  { name: "Isya", adhan: "19:09", iqamah: "19:19" },
+];
+
+const dateKeyFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function normalizeTime(value: string) {
+  return value.replace(".", ":");
+}
+
+function addMinutes(time: string, minutesToAdd: number) {
+  const [hours, minutes] = normalizeTime(time).split(":").map(Number);
+  const totalMinutes = (hours * 60 + minutes + minutesToAdd) % (24 * 60);
+  return `${String(Math.floor(totalMinutes / 60)).padStart(2, "0")}:${String(totalMinutes % 60).padStart(2, "0")}`;
+}
+
+function scheduleFromApi(jadwal: Record<string, string>): Prayer[] {
+  const prayerData = [
+    { name: "Subuh", key: "subuh", delay: 10 },
+    { name: "Dzuhur", key: "dzuhur", delay: 10 },
+    { name: "Ashar", key: "ashar", delay: 10 },
+    { name: "Maghrib", key: "maghrib", delay: 7 },
+    { name: "Isya", key: "isya", delay: 10 },
+  ];
+
+  return prayerData.map(({ name, key, delay }) => {
+    const adhan = normalizeTime(jadwal[key]);
+    return { name, adhan, iqamah: addMinutes(adhan, delay) };
+  });
+}
 
 const timeFormatter = new Intl.DateTimeFormat("id-ID", {
   timeZone: TIME_ZONE,
@@ -58,7 +94,7 @@ function getTimeParts(date: Date) {
   };
 }
 
-function getNextIqamah(date: Date) {
+function getNextIqamah(date: Date, prayerSchedule: Prayer[]) {
   const { hours, minutes, seconds } = getTimeParts(date);
   const currentSeconds = hours * 3600 + minutes * 60 + seconds;
 
@@ -98,6 +134,7 @@ function formatCountdown(totalSeconds: number) {
 export default function Home() {
   const [now, setNow] = useState<Date | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [prayerSchedule, setPrayerSchedule] = useState<Prayer[]>(FALLBACK_SCHEDULE);
 
   useEffect(() => {
     const updateClock = () => setNow(new Date());
@@ -113,7 +150,50 @@ export default function Home() {
     };
   }, []);
 
-  const nextIqamah = useMemo(() => (now ? getNextIqamah(now) : null), [now]);
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSchedule = async () => {
+      const dateKey = dateKeyFormatter.format(new Date());
+
+      try {
+        const cached = window.localStorage.getItem(SCHEDULE_CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached) as { date: string; schedule: Prayer[] };
+          if (parsed.date === dateKey && !cancelled) setPrayerSchedule(parsed.schedule);
+        }
+
+        const response = await fetch(`${SCHEDULE_API}?tanggal=${dateKey}`, { cache: "no-store" });
+        if (!response.ok) throw new Error("Jadwal Depok tidak tersedia");
+
+        const data = (await response.json()) as { jadwal: Record<string, string> };
+        const schedule = scheduleFromApi(data.jadwal);
+
+        if (!cancelled) {
+          setPrayerSchedule(schedule);
+          window.localStorage.setItem(
+            SCHEDULE_CACHE_KEY,
+            JSON.stringify({ date: dateKey, schedule }),
+          );
+        }
+      } catch {
+        // Jadwal terakhir atau fallback tetap digunakan saat internet terputus.
+      }
+    };
+
+    void loadSchedule();
+    const refreshTimer = window.setInterval(loadSchedule, 60 * 60 * 1000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(refreshTimer);
+    };
+  }, []);
+
+  const nextIqamah = useMemo(
+    () => (now ? getNextIqamah(now, prayerSchedule) : null),
+    [now, prayerSchedule],
+  );
   const timeParts = now ? timeFormatter.format(now).replaceAll(".", ":").split(":") : ["--", "--", "--"];
 
   const toggleFullscreen = async () => {
@@ -196,10 +276,10 @@ export default function Home() {
       <section className="schedule-section" aria-labelledby="schedule-title">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">JADWAL HARI INI</p>
+            <p className="eyebrow">JADWAL KOTA DEPOK</p>
             <h2 id="schedule-title">Waktu Sholat</h2>
           </div>
-          <p className="section-reminder">“Luruskan dan rapatkan shaf.”</p>
+          <p className="section-reminder">Metode Kemenag RI • Data MuslimKita.id</p>
         </div>
 
         <div className="prayer-grid">
