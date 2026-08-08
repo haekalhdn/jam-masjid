@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.6";
+const APP_VERSION = "2026.08.08.7";
 
 type Prayer = { name: string; adhan: string; iqamah: string };
 type DailyTimes = { imsak: string; syuruk: string };

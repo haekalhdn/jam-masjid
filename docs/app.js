@@ -1,7 +1,9 @@
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.6";
+const APP_VERSION = "2026.08.08.7";
+const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
+const CONTENT_REFRESH_MS = 30 * 1000;
 const pageParams = new URLSearchParams(window.location.search);
 const simulationPrayer = pageParams.get("demo") === "maghrib" ? "Maghrib" : null;
 const simulationRun = pageParams.get("run") || "default";
@@ -294,7 +296,7 @@ function updateDisplay() {
     if (displayMode === "countdown") displayShell.classList.add("iqamah-countdown-mode");
     if (displayMode === "shaf") displayShell.classList.add("shaf-mode");
     if (displayMode === "prayer") displayShell.classList.add("prayer-mode");
-    updateVideoPlayer(displayMode === "normal" && activeSlide === 2);
+    updateActiveVideoPlayer();
     scheduleNextSlide();
   }
 
@@ -357,36 +359,44 @@ document.addEventListener("fullscreenchange", () => {
   fullscreenButton.querySelector(".fullscreen-text").textContent = active ? "Keluar" : "Layar penuh";
 });
 
-const carouselSlides = [...document.querySelectorAll(".carousel-slide")];
-const carouselDots = [...document.querySelectorAll(".carousel-dot")];
-const videoPlayer = document.querySelector(".video-player");
-const slideDurations = [12000, 12000, 60000];
+const carousel = document.querySelector(".content-carousel");
+const defaultPosterSlide = document.querySelector(".poster-slide").cloneNode(true);
+const agendaSlide = document.querySelector(".agenda-slide").cloneNode(true);
+const defaultVideoSlide = document.querySelector(".video-slide").cloneNode(true);
+let carouselSlides = [...document.querySelectorAll(".carousel-slide")];
+let carouselDots = [...document.querySelectorAll(".carousel-dot")];
+let slideDurations = [12000, 12000, 60000];
+let contentSignature = "";
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 let activeSlide = 0;
 let slideTimer;
 
-function updateVideoPlayer(isActive) {
-  if (!videoPlayer) return;
-  const existingPlayer = videoPlayer.querySelector("iframe");
+function updateActiveVideoPlayer() {
+  document.querySelectorAll(".video-player").forEach((videoPlayer) => {
+    const slide = videoPlayer.closest(".carousel-slide");
+    const shouldPlay = displayMode === "normal" && carouselSlides[activeSlide] === slide;
+    const existingPlayer = videoPlayer.querySelector("iframe");
 
-  if (!isActive) {
-    existingPlayer?.remove();
-    return;
-  }
+    if (!shouldPlay) {
+      existingPlayer?.remove();
+      return;
+    }
 
-  if (existingPlayer) return;
-  const videoId = videoPlayer.dataset.youtubeId;
-  const iframe = document.createElement("iframe");
-  iframe.src =
-    "https://www.youtube-nocookie.com/embed/" +
-    videoId +
-    "?autoplay=1&mute=1&loop=1&playlist=" +
-    videoId +
-    "&playsinline=1&rel=0";
-  iframe.title = "Pengurus DKM Alhidayah 2026–2029";
-  iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
-  iframe.allowFullscreen = true;
-  videoPlayer.append(iframe);
+    if (existingPlayer) return;
+    const videoId = videoPlayer.dataset.youtubeId;
+    if (!videoId) return;
+    const iframe = document.createElement("iframe");
+    iframe.src =
+      "https://www.youtube-nocookie.com/embed/" +
+      videoId +
+      "?autoplay=1&mute=1&loop=1&playlist=" +
+      videoId +
+      "&playsinline=1&rel=0";
+    iframe.title = videoPlayer.dataset.title || "Video Masjid Al-Hidayah";
+    iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+    iframe.allowFullscreen = true;
+    videoPlayer.append(iframe);
+  });
 }
 
 function scheduleNextSlide() {
@@ -399,8 +409,9 @@ function scheduleNextSlide() {
 }
 
 function showSlide(index) {
+  if (!carouselSlides.length) return;
   activeSlide = index;
-  updateVideoPlayer(displayMode === "normal" && activeSlide === 2);
+  updateActiveVideoPlayer();
   carouselSlides.forEach((slide, slideIndex) => {
     const active = slideIndex === activeSlide;
     slide.classList.toggle("active", active);
@@ -415,9 +426,90 @@ function showSlide(index) {
   scheduleNextSlide();
 }
 
-carouselDots.forEach((dot) => {
-  dot.addEventListener("click", () => showSlide(Number(dot.dataset.slide)));
-});
+function bindCarouselDots() {
+  carouselDots.forEach((dot) => {
+    dot.addEventListener("click", () => showSlide(Number(dot.dataset.slide)));
+  });
+}
+
+function createPosterSlide(slide) {
+  const element = document.createElement("div");
+  element.className = "carousel-slide poster-slide";
+  element.setAttribute("aria-hidden", "true");
+  element.dataset.durationMs = String(Math.max(5, Number(slide.durationSeconds) || 12) * 1000);
+  const image = document.createElement("img");
+  image.src = slide.imageUrl;
+  image.alt = slide.title || "Poster kegiatan Masjid Al-Hidayah";
+  element.append(image);
+  return element;
+}
+
+function createVideoSlide(slide) {
+  const element = document.createElement("div");
+  element.className = "carousel-slide video-slide";
+  element.setAttribute("aria-hidden", "true");
+  element.dataset.durationMs = String(Math.max(10, Number(slide.durationSeconds) || 60) * 1000);
+  const player = document.createElement("div");
+  player.className = "video-player";
+  player.dataset.youtubeId = slide.youtubeId;
+  player.dataset.title = slide.title || "Video Masjid Al-Hidayah";
+  element.append(player);
+  return element;
+}
+
+function rebuildCarousel(data) {
+  const remotePosters = data.slides.filter((slide) => slide.kind === "poster" && slide.imageUrl);
+  const remoteVideos = data.slides.filter((slide) => slide.kind === "youtube" && slide.youtubeId);
+  const nextSlides = [
+    ...(remotePosters.length ? remotePosters.map(createPosterSlide) : [defaultPosterSlide.cloneNode(true)]),
+    agendaSlide.cloneNode(true),
+    ...(remoteVideos.length ? remoteVideos.map(createVideoSlide) : [defaultVideoSlide.cloneNode(true)]),
+  ];
+
+  carousel.querySelectorAll(".carousel-slide, .carousel-dots").forEach((element) => element.remove());
+  nextSlides.forEach((slide) => carousel.append(slide));
+
+  const dots = document.createElement("div");
+  dots.className = "carousel-dots";
+  dots.setAttribute("aria-label", "Pilih slide");
+  nextSlides.forEach((slide, index) => {
+    const dot = document.createElement("button");
+    dot.className = "carousel-dot";
+    dot.type = "button";
+    dot.dataset.slide = String(index);
+    dot.setAttribute("aria-label", `Tampilkan slide ${index + 1}`);
+    dots.append(dot);
+  });
+  carousel.append(dots);
+
+  carouselSlides = [...carousel.querySelectorAll(".carousel-slide")];
+  carouselDots = [...carousel.querySelectorAll(".carousel-dot")];
+  slideDurations = carouselSlides.map((slide) =>
+    Number(slide.dataset.durationMs) || (slide.classList.contains("video-slide") ? 60000 : 12000),
+  );
+  activeSlide = 0;
+  bindCarouselDots();
+  showSlide(0);
+}
+
+async function loadRemoteContent() {
+  try {
+    const response = await fetch(CONTENT_API, { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    const nextSignature = JSON.stringify(data);
+    if (nextSignature === contentSignature) return;
+    contentSignature = nextSignature;
+    rebuildCarousel(data);
+    if (data.ticker) {
+      document.querySelector(".ticker-window p").textContent = data.ticker;
+    }
+  } catch {
+    // Konten bawaan tetap tampil saat layanan pembaruan sedang tidak tersedia.
+  }
+}
+
+bindCarouselDots();
 
 scheduleNextSlide();
 
@@ -427,6 +519,8 @@ updateDailyTimes();
 updateDisplay();
 void loadDepokSchedule();
 void checkForUpdates();
+void loadRemoteContent();
 window.setInterval(updateDisplay, 1000);
 window.setInterval(loadDepokSchedule, 60 * 60 * 1000);
 window.setInterval(checkForUpdates, 60 * 1000);
+window.setInterval(loadRemoteContent, CONTENT_REFRESH_MS);
