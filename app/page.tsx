@@ -143,12 +143,13 @@ export default function Home() {
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const slideTimer = window.setInterval(
-      () => setActiveSlide((current) => (current + 1) % 2),
-      12000,
+    const slideDurations = [12000, 12000, 60000];
+    const slideTimer = window.setTimeout(
+      () => setActiveSlide((current) => (current + 1) % slideDurations.length),
+      slideDurations[activeSlide],
     );
-    return () => window.clearInterval(slideTimer);
-  }, []);
+    return () => window.clearTimeout(slideTimer);
+  }, [activeSlide]);
 
   useEffect(() => {
     let cancelled = false;
@@ -282,8 +283,21 @@ export default function Home() {
             </div>
           </div>
 
+          <div className={"carousel-slide video-slide" + (activeSlide === 2 ? " active" : "")} aria-hidden={activeSlide !== 2}>
+            <div className="video-player">
+              {activeSlide === 2 && (
+                <iframe
+                  src="https://www.youtube-nocookie.com/embed/X6AeZWXq_pE?autoplay=1&mute=1&loop=1&playlist=X6AeZWXq_pE&playsinline=1&rel=0"
+                  title="Pengurus DKM Alhidayah 2026–2029"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              )}
+            </div>
+          </div>
+
           <div className="carousel-dots" aria-label="Pilih slide">
-            {[0, 1].map((slide) => (
+            {[0, 1, 2].map((slide) => (
               <button
                 className={`carousel-dot${activeSlide === slide ? " active" : ""}`}
                 key={slide}

@@ -167,10 +167,48 @@ document.addEventListener("fullscreenchange", () => {
 
 const carouselSlides = [...document.querySelectorAll(".carousel-slide")];
 const carouselDots = [...document.querySelectorAll(".carousel-dot")];
+const videoPlayer = document.querySelector(".video-player");
+const slideDurations = [12000, 12000, 60000];
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 let activeSlide = 0;
+let slideTimer;
+
+function updateVideoPlayer(isActive) {
+  if (!videoPlayer) return;
+  const existingPlayer = videoPlayer.querySelector("iframe");
+
+  if (!isActive) {
+    existingPlayer?.remove();
+    return;
+  }
+
+  if (existingPlayer) return;
+  const videoId = videoPlayer.dataset.youtubeId;
+  const iframe = document.createElement("iframe");
+  iframe.src =
+    "https://www.youtube-nocookie.com/embed/" +
+    videoId +
+    "?autoplay=1&mute=1&loop=1&playlist=" +
+    videoId +
+    "&playsinline=1&rel=0";
+  iframe.title = "Pengurus DKM Alhidayah 2026–2029";
+  iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+  iframe.allowFullscreen = true;
+  videoPlayer.append(iframe);
+}
+
+function scheduleNextSlide() {
+  window.clearTimeout(slideTimer);
+  if (reducedMotion) return;
+  slideTimer = window.setTimeout(
+    () => showSlide((activeSlide + 1) % carouselSlides.length),
+    slideDurations[activeSlide] ?? 12000,
+  );
+}
 
 function showSlide(index) {
   activeSlide = index;
+  updateVideoPlayer(activeSlide === 2);
   carouselSlides.forEach((slide, slideIndex) => {
     const active = slideIndex === activeSlide;
     slide.classList.toggle("active", active);
@@ -182,15 +220,14 @@ function showSlide(index) {
     if (active) dot.setAttribute("aria-current", "true");
     else dot.removeAttribute("aria-current");
   });
+  scheduleNextSlide();
 }
 
 carouselDots.forEach((dot) => {
   dot.addEventListener("click", () => showSlide(Number(dot.dataset.slide)));
 });
 
-if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-  window.setInterval(() => showSlide((activeSlide + 1) % carouselSlides.length), 12000);
-}
+scheduleNextSlide();
 
 updatePrayerCards();
 updateDisplay();
