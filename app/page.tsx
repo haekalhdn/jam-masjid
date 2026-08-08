@@ -5,12 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.5";
+const APP_VERSION = "2026.08.08.6";
 
 type Prayer = { name: string; adhan: string; iqamah: string };
 type DailyTimes = { imsak: string; syuruk: string };
 type DisplayPhase =
   | { type: "normal" }
+  | { type: "daily"; name: "Imsak" | "Syuruk" }
   | { type: "adhan"; prayer: Prayer }
   | { type: "countdown"; prayer: Prayer; secondsRemaining: number }
   | { type: "shaf"; prayer: Prayer }
@@ -137,12 +138,29 @@ function getNextIqamah(date: Date, prayerSchedule: Prayer[]) {
   };
 }
 
-function getDisplayPhase(date: Date, prayerSchedule: Prayer[]): DisplayPhase {
+function getDisplayPhase(
+  date: Date,
+  prayerSchedule: Prayer[],
+  dailyTimes: DailyTimes,
+): DisplayPhase {
   const { hours, minutes, seconds } = getTimeParts(date);
   const currentSeconds = hours * 3600 + minutes * 60 + seconds;
   const adhanNoticeDuration = 30;
   const shafNoticeDuration = 10;
   const prayerModeDuration = 10 * 60;
+
+  const dailyNotices: Array<{ name: "Imsak" | "Syuruk"; time: string }> = [
+    { name: "Imsak", time: dailyTimes.imsak },
+    { name: "Syuruk", time: dailyTimes.syuruk },
+  ];
+
+  for (const notice of dailyNotices) {
+    const [noticeHour, noticeMinute] = notice.time.split(":").map(Number);
+    const noticeSeconds = noticeHour * 3600 + noticeMinute * 60;
+    if (currentSeconds >= noticeSeconds && currentSeconds < noticeSeconds + adhanNoticeDuration) {
+      return { type: "daily", name: notice.name };
+    }
+  }
 
   for (const prayer of prayerSchedule) {
     const [adhanHour, adhanMinute] = prayer.adhan.split(":").map(Number);
@@ -188,7 +206,7 @@ export default function Home() {
   const [availableVersion, setAvailableVersion] = useState<string | null>(null);
   const [isSimulation, setIsSimulation] = useState(false);
   const displayPhase: DisplayPhase = now
-    ? getDisplayPhase(now, prayerSchedule)
+    ? getDisplayPhase(now, prayerSchedule, dailyTimes)
     : { type: "normal" };
 
   useEffect(() => {
@@ -342,6 +360,7 @@ export default function Home() {
   const timeParts = now ? timeFormatter.format(now).replaceAll(".", ":").split(":") : ["--", "--", "--"];
   const shellModeClass = {
     normal: "",
+    daily: " daily-notice-mode",
     adhan: " adhan-mode",
     countdown: " iqamah-countdown-mode",
     shaf: " shaf-mode",
@@ -361,15 +380,22 @@ export default function Home() {
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
 
-      {(displayPhase.type === "adhan" ||
+      {(displayPhase.type === "daily" ||
+        displayPhase.type === "adhan" ||
         displayPhase.type === "countdown" ||
         displayPhase.type === "shaf") && (
         <section className={"transition-screen " + displayPhase.type} aria-live="polite" aria-atomic="true">
           <p className="transition-kicker">
-            {displayPhase.type === "adhan" ? "WAKTU SHOLAT" : "IQOMAH"}
+            {displayPhase.type === "daily"
+              ? "PENGINGAT WAKTU"
+              : displayPhase.type === "adhan"
+                ? "WAKTU SHOLAT"
+                : "IQOMAH"}
           </p>
           <h2>
-            {displayPhase.type === "adhan"
+            {displayPhase.type === "daily"
+              ? "Sudah Waktunya " + displayPhase.name
+              : displayPhase.type === "adhan"
               ? "Sudah Masuk Waktu " + displayPhase.prayer.name
               : displayPhase.type === "countdown"
                 ? "Iqomah " + displayPhase.prayer.name

@@ -84,10 +84,10 @@ button {
   transition: opacity 700ms ease, visibility 700ms ease;
 }
 
-.display-shell:is(.adhan-mode, .iqamah-countdown-mode, .shaf-mode, .prayer-mode) .topbar,
-.display-shell:is(.adhan-mode, .iqamah-countdown-mode, .shaf-mode, .prayer-mode) .hero-grid,
-.display-shell:is(.adhan-mode, .iqamah-countdown-mode, .shaf-mode, .prayer-mode) .schedule-section,
-.display-shell:is(.adhan-mode, .iqamah-countdown-mode, .shaf-mode, .prayer-mode) .announcement-bar {
+.display-shell:is(.daily-notice-mode, .adhan-mode, .iqamah-countdown-mode, .shaf-mode, .prayer-mode) .topbar,
+.display-shell:is(.daily-notice-mode, .adhan-mode, .iqamah-countdown-mode, .shaf-mode, .prayer-mode) .hero-grid,
+.display-shell:is(.daily-notice-mode, .adhan-mode, .iqamah-countdown-mode, .shaf-mode, .prayer-mode) .schedule-section,
+.display-shell:is(.daily-notice-mode, .adhan-mode, .iqamah-countdown-mode, .shaf-mode, .prayer-mode) .announcement-bar {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -111,7 +111,7 @@ button {
   transition: opacity 700ms ease, visibility 700ms ease;
 }
 
-.display-shell:is(.adhan-mode, .iqamah-countdown-mode, .shaf-mode) .transition-screen {
+.display-shell:is(.daily-notice-mode, .adhan-mode, .iqamah-countdown-mode, .shaf-mode) .transition-screen {
   opacity: 1;
   visibility: visible;
 }
@@ -132,6 +132,28 @@ button {
   font-weight: 500;
   line-height: 1.02;
   text-wrap: balance;
+}
+
+.display-shell:is(.daily-notice-mode, .adhan-mode) .transition-screen h2 {
+  color: transparent;
+  background: linear-gradient(
+    105deg,
+    #f8f4eb 12%,
+    #f8f4eb 38%,
+    #f1d28d 48%,
+    #fff7d9 52%,
+    #f8f4eb 62%,
+    #f8f4eb 88%
+  );
+  background-size: 260% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: text-shimmer 2.8s ease-in-out infinite;
+}
+
+@keyframes text-shimmer {
+  from { background-position: 130% 50%; }
+  to { background-position: -130% 50%; }
 }
 
 .iqamah-countdown-mode .transition-screen h2 {
@@ -915,6 +937,11 @@ button {
   .transition-screen,
   .carousel-slide {
     transition: none;
+  }
+
+  .display-shell:is(.daily-notice-mode, .adhan-mode) .transition-screen h2 {
+    animation: none;
+    background-position: 50% 50%;
   }
 
   .ticker-window p {

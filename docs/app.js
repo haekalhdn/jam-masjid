@@ -1,7 +1,7 @@
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.5";
+const APP_VERSION = "2026.08.08.6";
 const pageParams = new URLSearchParams(window.location.search);
 const simulationPrayer = pageParams.get("demo") === "maghrib" ? "Maghrib" : null;
 const simulationRun = pageParams.get("run") || "default";
@@ -134,6 +134,19 @@ function getDisplayPhase(date) {
   const adhanNoticeDuration = 30;
   const shafNoticeDuration = 10;
   const prayerModeDuration = 10 * 60;
+
+  const dailyNotices = [
+    { name: "Imsak", time: dailyTimes.imsak },
+    { name: "Syuruk", time: dailyTimes.syuruk },
+  ];
+
+  for (const notice of dailyNotices) {
+    const [noticeHour, noticeMinute] = notice.time.split(":").map(Number);
+    const noticeSeconds = noticeHour * 3600 + noticeMinute * 60;
+    if (currentSeconds >= noticeSeconds && currentSeconds < noticeSeconds + adhanNoticeDuration) {
+      return { type: "daily", name: notice.name };
+    }
+  }
 
   for (const prayer of prayerSchedule) {
     const [adhanHour, adhanMinute] = prayer.adhan.split(":").map(Number);
@@ -269,7 +282,14 @@ function updateDisplay() {
 
   if (phase.type !== displayMode) {
     displayMode = phase.type;
-    displayShell.classList.remove("adhan-mode", "iqamah-countdown-mode", "shaf-mode", "prayer-mode");
+    displayShell.classList.remove(
+      "daily-notice-mode",
+      "adhan-mode",
+      "iqamah-countdown-mode",
+      "shaf-mode",
+      "prayer-mode",
+    );
+    if (displayMode === "daily") displayShell.classList.add("daily-notice-mode");
     if (displayMode === "adhan") displayShell.classList.add("adhan-mode");
     if (displayMode === "countdown") displayShell.classList.add("iqamah-countdown-mode");
     if (displayMode === "shaf") displayShell.classList.add("shaf-mode");
@@ -279,18 +299,28 @@ function updateDisplay() {
   }
 
   const showTransition =
-    phase.type === "adhan" || phase.type === "countdown" || phase.type === "shaf";
+    phase.type === "daily" ||
+    phase.type === "adhan" ||
+    phase.type === "countdown" ||
+    phase.type === "shaf";
   transitionScreen.setAttribute("aria-hidden", String(!showTransition));
 
   if (showTransition) {
     const isAdhan = phase.type === "adhan";
     const isCountdown = phase.type === "countdown";
-    transitionKicker.textContent = isAdhan ? "WAKTU SHOLAT" : "IQOMAH";
-    transitionTitle.textContent = isAdhan
-      ? "Sudah Masuk Waktu " + phase.prayer.name
-      : isCountdown
-        ? "Iqomah " + phase.prayer.name
-        : "Luruskan dan Rapatkan Shaf";
+    const isDaily = phase.type === "daily";
+    transitionKicker.textContent = isDaily
+      ? "PENGINGAT WAKTU"
+      : isAdhan
+        ? "WAKTU SHOLAT"
+        : "IQOMAH";
+    transitionTitle.textContent = isDaily
+      ? "Sudah Waktunya " + phase.name
+      : isAdhan
+        ? "Sudah Masuk Waktu " + phase.prayer.name
+        : isCountdown
+          ? "Iqomah " + phase.prayer.name
+          : "Luruskan dan Rapatkan Shaf";
     transitionCountdown.hidden = !isCountdown;
     if (isCountdown) transitionCountdown.textContent = formatCountdown(phase.secondsRemaining);
     transitionMessage.hidden = !isAdhan;
