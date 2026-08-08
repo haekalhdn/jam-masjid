@@ -72,7 +72,8 @@ const menuKeyboard = {
     [{ text: "▶️ Ganti YouTube" }, { text: "🕋 Mode Jumat" }],
     [{ text: "📢 Ubah info TV" }, { text: "🧹 Sembunyikan info" }],
     [{ text: "⏱ Atur iqomah" }, { text: "🕌 Durasi sholat" }],
-    [{ text: "📋 Lihat konten" }, { text: "❌ Batal" }],
+    [{ text: "👤 Undang admin" }, { text: "📋 Lihat konten" }],
+    [{ text: "❌ Batal" }],
   ],
   resize_keyboard: true,
   is_persistent: true,
@@ -97,6 +98,18 @@ function safeEqual(left: string, right: string) {
 function displayName(user: TelegramUser) {
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
   return fullName || user.username || String(user.id);
+}
+
+async function hashInviteCode(code: string) {
+  const normalized = code.trim().toUpperCase();
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalized));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function generateInviteCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  return `MASJID-${[...bytes].map((byte) => alphabet[byte % alphabet.length]).join("")}`;
 }
 
 function parseTimingSetting<T extends Record<string, number>>(value: string | undefined, defaults: T): T {
@@ -238,15 +251,35 @@ async function isAdmin(env: Env, userId: number) {
 
 async function claimAdmin(env: Env, message: TelegramMessage, code: string) {
   const user = message.from;
-  if (!user || !env.ADMIN_CLAIM_CODE || !safeEqual(code, env.ADMIN_CLAIM_CODE)) {
+  if (!user) {
     await sendMessage(env, message.chat.id, "Kode aktivasi tidak sesuai.", false);
     return;
   }
 
-  const count = await env.DB.prepare("SELECT COUNT(*) AS total FROM admins").first<{ total: number }>();
-  if (Number(count?.total || 0) > 0) {
-    await sendMessage(env, message.chat.id, "Admin utama sudah diaktifkan.", false);
+  if (await isAdmin(env, user.id)) {
+    await sendMessage(env, message.chat.id, "Akun ini sudah menjadi admin layar masjid.");
     return;
+  }
+
+  const count = await env.DB.prepare("SELECT COUNT(*) AS total FROM admins").first<{ total: number }>();
+  const isFirstAdminCode =
+    Number(count?.total || 0) === 0 &&
+    Boolean(env.ADMIN_CLAIM_CODE) &&
+    safeEqual(code, env.ADMIN_CLAIM_CODE || "");
+
+  if (!isFirstAdminCode) {
+    const codeHash = await hashInviteCode(code);
+    const claimed = await env.DB.prepare(
+      `UPDATE admin_invites
+       SET used_at = CURRENT_TIMESTAMP
+       WHERE code_hash = ?1 AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP`,
+    )
+      .bind(codeHash)
+      .run();
+    if (!claimed.meta.changes) {
+      await sendMessage(env, message.chat.id, "Kode undangan tidak valid, sudah dipakai, atau sudah kedaluwarsa.", false);
+      return;
+    }
   }
 
   await env.DB.prepare(
@@ -258,6 +291,25 @@ async function claimAdmin(env: Env, message: TelegramMessage, code: string) {
     env,
     message.chat.id,
     "✅ Akun ini sekarang menjadi admin layar masjid. Gunakan tombol di bawah untuk mengelola konten.",
+  );
+}
+
+async function createAdminInvite(env: Env, chatId: number, userId: number) {
+  const code = generateInviteCode();
+  const codeHash = await hashInviteCode(code);
+  await env.DB.prepare(
+    "DELETE FROM admin_invites WHERE used_at IS NOT NULL OR expires_at <= CURRENT_TIMESTAMP",
+  ).run();
+  await env.DB.prepare(
+    `INSERT INTO admin_invites(code_hash, created_by, expires_at)
+     VALUES (?1, ?2, datetime('now', '+24 hours'))`,
+  )
+    .bind(codeHash, String(userId))
+    .run();
+  await sendMessage(
+    env,
+    chatId,
+    `<b>Kode undangan admin</b>\n<code>${code}</code>\n\nKirim kode ini kepada calon admin. Ia cukup mengirim:\n<code>/claim ${code}</code>\n\nKode berlaku 24 jam dan hanya dapat dipakai satu kali.`,
   );
 }
 
@@ -623,6 +675,11 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate) {
 
   if (text === "📋 Lihat konten" || text === "/list") {
     await listContent(env, message.chat.id);
+    return;
+  }
+
+  if (text === "👤 Undang admin" || text === "/undang") {
+    await createAdminInvite(env, message.chat.id, user.id);
     return;
   }
 
