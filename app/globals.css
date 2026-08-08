@@ -519,6 +519,61 @@ button {
   text-align: right;
 }
 
+.friday-slide {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(28px, 2.8vw, 52px);
+  background:
+    radial-gradient(circle at 88% 12%, rgba(241, 210, 141, 0.24), transparent 30%),
+    linear-gradient(145deg, rgba(27, 86, 70, 0.98), rgba(5, 29, 24, 0.98));
+}
+
+.friday-heading h2 {
+  max-width: 780px;
+  margin: 8px 0 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(30px, 3vw, 58px);
+  font-weight: 500;
+  line-height: 1.06;
+}
+
+.friday-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(12px, 1.4vw, 24px);
+}
+
+.friday-details > div {
+  padding-top: clamp(12px, 1.2vh, 18px);
+  border-top: 1px solid rgba(241, 210, 141, 0.32);
+}
+
+.friday-details span,
+.friday-details strong {
+  display: block;
+}
+
+.friday-details span {
+  margin-bottom: 7px;
+  color: var(--gold-bright);
+  font-size: clamp(10px, 0.72vw, 13px);
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.friday-details strong {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(18px, 1.5vw, 28px);
+  font-weight: 500;
+}
+
+.prayer-card.friday-card {
+  border-color: rgba(241, 210, 141, 0.62);
+  background: linear-gradient(145deg, rgba(83, 112, 82, 0.82), rgba(13, 55, 45, 0.9));
+}
+
 .video-slide {
   background: #000;
 }

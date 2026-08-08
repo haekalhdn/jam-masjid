@@ -1,7 +1,7 @@
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.9";
+const APP_VERSION = "2026.08.08.10";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
 const CONTENT_REFRESH_MS = 30 * 1000;
 const pageParams = new URLSearchParams(window.location.search);
@@ -9,7 +9,8 @@ const simulationPrayer = pageParams.get("demo") === "maghrib" ? "Maghrib" : null
 const simulationRun = pageParams.get("run") || "default";
 const simulationStorageKey = "jam-masjid-demo-maghrib-" + simulationRun;
 const DEFAULT_IQAMAH_DELAYS = { Subuh: 7, Dzuhur: 7, Ashar: 7, Maghrib: 7, Isya: 7 };
-const DEFAULT_PRAYER_DURATIONS = { Subuh: 10, Dzuhur: 10, Ashar: 10, Maghrib: 10, Isya: 10 };
+const DEFAULT_PRAYER_DURATIONS = { Subuh: 10, Dzuhur: 10, Ashar: 10, Maghrib: 10, Isya: 10, Jumat: 40 };
+const DEFAULT_FRIDAY_SETTINGS = { theme: "Akan diumumkan", khatib: "Akan diumumkan", imam: "Akan diumumkan" };
 
 let prayerSchedule = [
   { name: "Subuh", adhan: "04:46", iqamah: "04:53" },
@@ -21,6 +22,7 @@ let prayerSchedule = [
 let dailyTimes = { imsak: "04:36", syuruk: "05:59" };
 let iqamahDelays = { ...DEFAULT_IQAMAH_DELAYS };
 let prayerDurations = { ...DEFAULT_PRAYER_DURATIONS };
+let fridaySettings = { ...DEFAULT_FRIDAY_SETTINGS };
 let displayMode = "normal";
 let pendingVersion = null;
 
@@ -93,6 +95,19 @@ const hijriFormatter = new Intl.DateTimeFormat("id-ID-u-ca-islamic", {
   year: "numeric",
 });
 
+const weekdayFormatter = new Intl.DateTimeFormat("id-ID", {
+  timeZone: TIME_ZONE,
+  weekday: "long",
+});
+
+function isFriday(date) {
+  return weekdayFormatter.format(date).toLowerCase() === "jumat";
+}
+
+function prayerLabel(prayer, date) {
+  return prayer.name === "Dzuhur" && isFriday(date) ? "Jumat" : prayer.name;
+}
+
 function getTimeParts(date) {
   return Object.fromEntries(
     clockFormatter
@@ -163,7 +178,8 @@ function getDisplayPhase(date) {
   }
 
   for (const prayer of prayerSchedule) {
-    const prayerModeDuration = (prayerDurations[prayer.name] ?? 10) * 60;
+    const name = prayerLabel(prayer, date);
+    const prayerModeDuration = (prayerDurations[name] ?? 10) * 60;
     const [adhanHour, adhanMinute] = prayer.adhan.split(":").map(Number);
     const [iqamahHour, iqamahMinute] = prayer.iqamah.split(":").map(Number);
     const adhanSeconds = adhanHour * 3600 + adhanMinute * 60;
@@ -222,12 +238,15 @@ async function checkForUpdates() {
 }
 
 function updatePrayerCards() {
+  const now = new Date();
   document.querySelectorAll(".prayer-card").forEach((card) => {
     const prayer = prayerSchedule.find((item) => item.name === card.dataset.prayer);
     if (!prayer) return;
     const values = card.querySelectorAll(".prayer-times strong");
     values[0].textContent = prayer.adhan;
     values[1].textContent = prayer.iqamah;
+    card.querySelector("h3").textContent = prayerLabel(prayer, now);
+    card.classList.toggle("friday-card", prayer.name === "Dzuhur" && isFriday(now));
   });
 }
 
@@ -291,6 +310,7 @@ if (simulationPrayer) {
 
 function updateDisplay() {
   const now = new Date();
+  updatePrayerCards();
   const { hour, minute, second } = getTimeParts(now);
   const next = getNextIqamah(now);
   const phase = getDisplayPhase(now);
@@ -329,12 +349,13 @@ function updateDisplay() {
       : isAdhan
         ? "WAKTU SHOLAT"
         : "IQOMAH";
+    const activePrayerName = phase.prayer ? prayerLabel(phase.prayer, now) : "";
     transitionTitle.textContent = isDaily
       ? "Sudah Waktunya " + phase.name
       : isAdhan
-        ? "Sudah Masuk Waktu " + phase.prayer.name
+        ? "Sudah Masuk Waktu " + activePrayerName
         : isCountdown
-          ? "Iqomah " + phase.prayer.name
+          ? "Iqomah " + activePrayerName
           : "Luruskan dan Rapatkan Shaf";
     transitionCountdown.hidden = !isCountdown;
     if (isCountdown) transitionCountdown.textContent = formatCountdown(phase.secondsRemaining);
@@ -469,10 +490,42 @@ function createVideoSlide(slide) {
   return element;
 }
 
+function createFridaySlide(settings) {
+  const element = document.createElement("div");
+  element.className = "carousel-slide friday-slide";
+  element.setAttribute("aria-hidden", "true");
+  element.dataset.durationMs = "15000";
+
+  const heading = document.createElement("div");
+  heading.className = "friday-heading";
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "eyebrow";
+  eyebrow.textContent = "SHOLAT JUMAT";
+  const title = document.createElement("h2");
+  title.textContent = settings.theme;
+  heading.append(eyebrow, title);
+
+  const details = document.createElement("div");
+  details.className = "friday-details";
+  [["Khatib", settings.khatib], ["Imam", settings.imam]].forEach(([label, value]) => {
+    const item = document.createElement("div");
+    const caption = document.createElement("span");
+    caption.textContent = label;
+    const content = document.createElement("strong");
+    content.textContent = value;
+    item.append(caption, content);
+    details.append(item);
+  });
+
+  element.append(heading, details);
+  return element;
+}
+
 function rebuildCarousel(data) {
   const remotePosters = data.slides.filter((slide) => slide.kind === "poster" && slide.imageUrl);
   const remoteVideos = data.slides.filter((slide) => slide.kind === "youtube" && slide.youtubeId);
   const nextSlides = [
+    ...(isFriday(new Date()) ? [createFridaySlide(fridaySettings)] : []),
     ...remotePosters.map(createPosterSlide),
     ...remoteVideos.map(createVideoSlide),
   ];
@@ -522,11 +575,16 @@ async function loadRemoteContent() {
     const response = await fetch(CONTENT_API, { cache: "no-store" });
     if (!response.ok) return;
     const data = await response.json();
-    const nextSignature = JSON.stringify(data);
+    const nextSignature = JSON.stringify(data) + ":" + isFriday(new Date());
     if (nextSignature === contentSignature) return;
     contentSignature = nextSignature;
     iqamahDelays = normalizeTimingMap(data.iqamahDelays, DEFAULT_IQAMAH_DELAYS);
     prayerDurations = normalizeTimingMap(data.prayerDurations, DEFAULT_PRAYER_DURATIONS);
+    fridaySettings = {
+      theme: String(data.friday?.theme || DEFAULT_FRIDAY_SETTINGS.theme),
+      khatib: String(data.friday?.khatib || DEFAULT_FRIDAY_SETTINGS.khatib),
+      imam: String(data.friday?.imam || DEFAULT_FRIDAY_SETTINGS.imam),
+    };
     prayerSchedule = prayerSchedule.map((prayer) => ({
       ...prayer,
       iqamah: addMinutes(prayer.adhan, iqamahDelays[prayer.name] ?? 7),

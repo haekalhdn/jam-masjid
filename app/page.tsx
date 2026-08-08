@@ -6,12 +6,14 @@ const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
-const APP_VERSION = "2026.08.08.9";
+const APP_VERSION = "2026.08.08.10";
 
 type PrayerName = "Subuh" | "Dzuhur" | "Ashar" | "Maghrib" | "Isya";
 type TimingMap = Record<PrayerName, number>;
+type PrayerDurationMap = TimingMap & { Jumat: number };
 type Prayer = { name: PrayerName; adhan: string; iqamah: string };
 type DailyTimes = { imsak: string; syuruk: string };
+type FridaySettings = { theme: string; khatib: string; imam: string };
 type ContentSlide = {
   id: number;
   kind: "poster" | "youtube";
@@ -20,6 +22,8 @@ type ContentSlide = {
   youtubeId: string | null;
   durationSeconds: number;
 };
+type FridaySlide = FridaySettings & { id: "friday"; kind: "friday"; durationSeconds: number };
+type DisplaySlide = ContentSlide | FridaySlide;
 const DEFAULT_IQAMAH_DELAYS: TimingMap = {
   Subuh: 7,
   Dzuhur: 7,
@@ -27,12 +31,18 @@ const DEFAULT_IQAMAH_DELAYS: TimingMap = {
   Maghrib: 7,
   Isya: 7,
 };
-const DEFAULT_PRAYER_DURATIONS: TimingMap = {
+const DEFAULT_PRAYER_DURATIONS: PrayerDurationMap = {
   Subuh: 10,
   Dzuhur: 10,
   Ashar: 10,
   Maghrib: 10,
   Isya: 10,
+  Jumat: 40,
+};
+const DEFAULT_FRIDAY_SETTINGS: FridaySettings = {
+  theme: "Akan diumumkan",
+  khatib: "Akan diumumkan",
+  imam: "Akan diumumkan",
 };
 type DisplayPhase =
   | { type: "normal" }
@@ -68,13 +78,13 @@ function addMinutes(time: string, minutesToAdd: number) {
   return `${String(Math.floor(totalMinutes / 60)).padStart(2, "0")}:${String(totalMinutes % 60).padStart(2, "0")}`;
 }
 
-function normalizeTimingMap(values: Partial<TimingMap> | undefined, defaults: TimingMap): TimingMap {
+function normalizeTimingMap<T extends Record<string, number>>(values: Partial<T> | undefined, defaults: T): T {
   return Object.fromEntries(
-    (Object.keys(defaults) as PrayerName[]).map((name) => {
+    Object.keys(defaults).map((name) => {
       const candidate = Number(values?.[name]);
       return [name, Number.isFinite(candidate) ? candidate : defaults[name]];
     }),
-  ) as TimingMap;
+  ) as T;
 }
 
 function scheduleFromApi(jadwal: Record<string, string>, iqamahDelays: TimingMap): Prayer[] {
@@ -121,6 +131,19 @@ const hijriFormatter = new Intl.DateTimeFormat("id-ID-u-ca-islamic", {
   month: "long",
   year: "numeric",
 });
+
+const weekdayFormatter = new Intl.DateTimeFormat("id-ID", {
+  timeZone: TIME_ZONE,
+  weekday: "long",
+});
+
+function isFriday(date: Date) {
+  return weekdayFormatter.format(date).toLowerCase() === "jumat";
+}
+
+function prayerLabel(prayer: Prayer, date: Date) {
+  return prayer.name === "Dzuhur" && isFriday(date) ? "Jumat" : prayer.name;
+}
 
 const clockPartsFormatter = new Intl.DateTimeFormat("en-GB", {
   timeZone: TIME_ZONE,
@@ -176,7 +199,7 @@ function getDisplayPhase(
   date: Date,
   prayerSchedule: Prayer[],
   dailyTimes: DailyTimes,
-  prayerDurations: TimingMap,
+  prayerDurations: PrayerDurationMap,
 ): DisplayPhase {
   const { hours, minutes, seconds } = getTimeParts(date);
   const currentSeconds = hours * 3600 + minutes * 60 + seconds;
@@ -197,7 +220,7 @@ function getDisplayPhase(
   }
 
   for (const prayer of prayerSchedule) {
-    const prayerModeDuration = prayerDurations[prayer.name] * 60;
+    const prayerModeDuration = prayerDurations[prayerLabel(prayer, date)] * 60;
     const [adhanHour, adhanMinute] = prayer.adhan.split(":").map(Number);
     const [iqamahHour, iqamahMinute] = prayer.iqamah.split(":").map(Number);
     const adhanSeconds = adhanHour * 3600 + adhanMinute * 60;
@@ -239,7 +262,8 @@ export default function Home() {
   const [dailyTimes, setDailyTimes] = useState<DailyTimes>(FALLBACK_DAILY_TIMES);
   const [contentSlides, setContentSlides] = useState<ContentSlide[]>([]);
   const [ticker, setTicker] = useState("");
-  const [prayerDurations, setPrayerDurations] = useState<TimingMap>(DEFAULT_PRAYER_DURATIONS);
+  const [prayerDurations, setPrayerDurations] = useState<PrayerDurationMap>(DEFAULT_PRAYER_DURATIONS);
+  const [fridaySettings, setFridaySettings] = useState<FridaySettings>(DEFAULT_FRIDAY_SETTINGS);
   const [activeSlide, setActiveSlide] = useState(0);
   const [availableVersion, setAvailableVersion] = useState<string | null>(null);
   const [isSimulation, setIsSimulation] = useState(false);
@@ -248,6 +272,16 @@ export default function Home() {
   const displayPhase: DisplayPhase = now
     ? getDisplayPhase(now, prayerSchedule, dailyTimes, prayerDurations)
     : { type: "normal" };
+  const fridayMode = now ? isFriday(now) : false;
+  const displaySlides = useMemo<DisplaySlide[]>(
+    () => [
+      ...(fridayMode
+        ? [{ id: "friday" as const, kind: "friday" as const, durationSeconds: 15, ...fridaySettings }]
+        : []),
+      ...contentSlides,
+    ],
+    [contentSlides, fridayMode, fridaySettings],
+  );
 
   useEffect(() => {
     const updateClock = () => setNow(new Date());
@@ -264,16 +298,20 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    setActiveSlide(0);
+  }, [fridayMode]);
+
+  useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     if (displayPhase.type !== "normal") return;
-    if (!contentSlides.length) return;
-    const duration = Math.max(5, contentSlides[activeSlide]?.durationSeconds || 12) * 1000;
+    if (!displaySlides.length) return;
+    const duration = Math.max(5, displaySlides[activeSlide]?.durationSeconds || 12) * 1000;
     const slideTimer = window.setTimeout(
-      () => setActiveSlide((current) => (current + 1) % contentSlides.length),
+      () => setActiveSlide((current) => (current + 1) % displaySlides.length),
       duration,
     );
     return () => window.clearTimeout(slideTimer);
-  }, [activeSlide, contentSlides, displayPhase.type]);
+  }, [activeSlide, displayPhase.type, displaySlides]);
 
   useEffect(() => {
     let cancelled = false;
@@ -286,7 +324,8 @@ export default function Home() {
           slides?: ContentSlide[];
           ticker?: string | null;
           iqamahDelays?: Partial<TimingMap>;
-          prayerDurations?: Partial<TimingMap>;
+          prayerDurations?: Partial<PrayerDurationMap>;
+          friday?: Partial<FridaySettings>;
         };
         if (cancelled) return;
         const nextSignature = JSON.stringify(data);
@@ -296,6 +335,11 @@ export default function Home() {
         const nextPrayerDurations = normalizeTimingMap(data.prayerDurations, DEFAULT_PRAYER_DURATIONS);
         iqamahDelaysRef.current = nextIqamahDelays;
         setPrayerDurations(nextPrayerDurations);
+        setFridaySettings({
+          theme: String(data.friday?.theme || DEFAULT_FRIDAY_SETTINGS.theme),
+          khatib: String(data.friday?.khatib || DEFAULT_FRIDAY_SETTINGS.khatib),
+          imam: String(data.friday?.imam || DEFAULT_FRIDAY_SETTINGS.imam),
+        });
         setPrayerSchedule((current) =>
           current.map((prayer) => ({
             ...prayer,
@@ -484,9 +528,9 @@ export default function Home() {
             {displayPhase.type === "daily"
               ? "Sudah Waktunya " + displayPhase.name
               : displayPhase.type === "adhan"
-              ? "Sudah Masuk Waktu " + displayPhase.prayer.name
+              ? "Sudah Masuk Waktu " + prayerLabel(displayPhase.prayer, now || new Date())
               : displayPhase.type === "countdown"
-                ? "Iqomah " + displayPhase.prayer.name
+                ? "Iqomah " + prayerLabel(displayPhase.prayer, now || new Date())
                 : "Luruskan dan Rapatkan Shaf"}
           </h2>
           {displayPhase.type === "countdown" && (
@@ -528,7 +572,7 @@ export default function Home() {
         </div>
       </header>
 
-      <section className={`hero-grid${contentSlides.length ? "" : " content-empty"}`}>
+      <section className={`hero-grid${displaySlides.length ? "" : " content-empty"}`}>
         <div className="clock-panel">
           <div className="clock-label">
             <span /> Waktu sekarang
@@ -558,18 +602,29 @@ export default function Home() {
         </div>
 
         <div
-          className={`content-carousel${contentSlides.length ? "" : " content-empty"}`}
+          className={`content-carousel${displaySlides.length ? "" : " content-empty"}`}
           aria-label="Informasi kegiatan masjid"
           aria-roledescription="carousel"
-          aria-hidden={!contentSlides.length}
+          aria-hidden={!displaySlides.length}
         >
-          {contentSlides.map((slide, index) => (
+          {displaySlides.map((slide, index) => (
             <div
-              className={`carousel-slide ${slide.kind === "poster" ? "poster-slide" : "video-slide"}${activeSlide === index ? " active" : ""}`}
+              className={`carousel-slide ${slide.kind === "poster" ? "poster-slide" : slide.kind === "youtube" ? "video-slide" : "friday-slide"}${activeSlide === index ? " active" : ""}`}
               aria-hidden={activeSlide !== index}
               key={slide.id}
             >
-              {slide.kind === "poster" && slide.imageUrl ? (
+              {slide.kind === "friday" ? (
+                <>
+                  <div className="friday-heading">
+                    <p className="eyebrow">SHOLAT JUMAT</p>
+                    <h2>{slide.theme}</h2>
+                  </div>
+                  <div className="friday-details">
+                    <div><span>Khatib</span><strong>{slide.khatib}</strong></div>
+                    <div><span>Imam</span><strong>{slide.imam}</strong></div>
+                  </div>
+                </>
+              ) : slide.kind === "poster" && slide.imageUrl ? (
                 <img src={slide.imageUrl} alt={slide.title || "Poster kegiatan Masjid Al-Hidayah"} />
               ) : (
                 <div className="video-player">
@@ -586,9 +641,9 @@ export default function Home() {
             </div>
           ))}
 
-          {contentSlides.length > 0 && (
+          {displaySlides.length > 0 && (
             <div className="carousel-dots" aria-label="Pilih slide">
-              {contentSlides.map((slide, index) => (
+              {displaySlides.map((slide, index) => (
                 <button
                   className={`carousel-dot${activeSlide === index ? " active" : ""}`}
                   key={slide.id}
@@ -619,12 +674,14 @@ export default function Home() {
         <div className="prayer-grid">
           {prayerSchedule.map((prayer) => {
             const isNext = nextIqamah?.prayer.name === prayer.name;
+            const displayName = now ? prayerLabel(prayer, now) : prayer.name;
+            const isFridayCard = displayName === "Jumat";
             return (
-              <article className={`prayer-card${isNext ? " active" : ""}`} key={prayer.name}>
+              <article className={`prayer-card${isNext ? " active" : ""}${isFridayCard ? " friday-card" : ""}`} key={prayer.name}>
                 {isNext && <span className="next-badge">BERIKUTNYA</span>}
                 <div className="prayer-card-top">
                   <span className="prayer-icon" aria-hidden="true">{prayer.name === "Subuh" ? "◒" : prayer.name === "Maghrib" ? "◓" : "☼"}</span>
-                  <h3>{prayer.name}</h3>
+                  <h3>{displayName}</h3>
                 </div>
                 <div className="prayer-times">
                   <div>
