@@ -42,8 +42,8 @@ const jsonHeaders = {
 const menuKeyboard = {
   keyboard: [
     [{ text: "🖼 Tambah poster" }, { text: "▶️ Ganti YouTube" }],
-    [{ text: "📢 Ubah info TV" }, { text: "📋 Lihat konten" }],
-    [{ text: "❌ Batal" }],
+    [{ text: "📢 Ubah info TV" }, { text: "🧹 Sembunyikan info" }],
+    [{ text: "📋 Lihat konten" }, { text: "❌ Batal" }],
   ],
   resize_keyboard: true,
   is_persistent: true,
@@ -183,12 +183,12 @@ async function listContent(env: Env, chatId: number) {
             : `#${slide.id} • YouTube — ${slide.youtube_id}`,
         )
         .join("\n")
-    : "Belum ada konten tambahan; layar masih memakai poster dan video bawaan.";
+    : "Belum ada slide. Tambahkan poster atau video dari menu.";
 
   await sendMessage(
     env,
     chatId,
-    `<b>Konten layar</b>\n${slideText}\n\n<b>Info berjalan</b>\n${ticker?.value || "-"}\n\nUntuk menghapus slide, kirim <code>/hapus ID</code>.`,
+    `<b>Konten layar</b>\n${slideText}\n\n<b>Info berjalan</b>\n${ticker?.value || "Tidak ditampilkan"}\n\nUntuk menghapus slide, kirim <code>/hapus ID</code>.`,
   );
 }
 
@@ -277,6 +277,16 @@ async function saveTicker(env: Env, message: TelegramMessage, userId: number, te
   await sendMessage(env, message.chat.id, "✅ Info berjalan sudah diperbarui.");
 }
 
+async function clearTicker(env: Env, chatId: number, userId: number) {
+  await env.DB.prepare(
+    `INSERT INTO settings(key, value, updated_at)
+     VALUES ('ticker', '', CURRENT_TIMESTAMP)
+     ON CONFLICT(key) DO UPDATE SET value = '', updated_at = CURRENT_TIMESTAMP`,
+  ).run();
+  await clearSession(env, userId);
+  await sendMessage(env, chatId, "✅ Info bagian bawah sudah disembunyikan.");
+}
+
 async function deleteSlide(env: Env, message: TelegramMessage, idText: string) {
   const id = Number(idText);
   if (!Number.isInteger(id) || id <= 0) {
@@ -341,6 +351,11 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate) {
 
   if (text === "📋 Lihat konten" || text === "/list") {
     await listContent(env, message.chat.id);
+    return;
+  }
+
+  if (text === "🧹 Sembunyikan info" || text === "/hapusinfo") {
+    await clearTicker(env, message.chat.id, user.id);
     return;
   }
 

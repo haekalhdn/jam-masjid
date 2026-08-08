@@ -310,6 +310,17 @@ button {
   padding: clamp(30px, 3vw, 56px) 0;
 }
 
+.hero-grid.content-empty {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+
+.hero-grid.content-empty .clock-panel {
+  width: min(100%, 880px);
+  padding-left: 0;
+  align-items: center;
+}
+
 .clock-panel {
   padding-left: clamp(0px, 2vw, 38px);
 }
@@ -429,6 +440,10 @@ button {
   border-radius: 22px;
   background: rgba(5, 28, 23, 0.9);
   box-shadow: 0 26px 70px rgba(0, 0, 0, 0.34), 0 0 0 6px rgba(214, 181, 109, 0.06);
+}
+
+.content-carousel.content-empty {
+  display: none;
 }
 
 .carousel-slide {
@@ -651,6 +666,14 @@ button {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: clamp(10px, 1vw, 18px);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.prayer-grid::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .prayer-card {
@@ -740,6 +763,10 @@ button {
   margin: 0 calc(clamp(24px, 3.3vw, 68px) * -1);
   border-top: 1px solid rgba(214, 181, 109, 0.25);
   background: rgba(3, 16, 13, 0.78);
+}
+
+.announcement-bar[hidden] {
+  display: none;
 }
 
 .announcement-label {
@@ -851,6 +878,8 @@ button {
   .prayer-grid {
     grid-template-columns: repeat(5, minmax(150px, 1fr));
     overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
     padding: 10px 0;
   }
 }

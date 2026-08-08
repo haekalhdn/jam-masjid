@@ -1,14 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.7";
+const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
+const APP_VERSION = "2026.08.08.8";
 
 type Prayer = { name: string; adhan: string; iqamah: string };
 type DailyTimes = { imsak: string; syuruk: string };
+type ContentSlide = {
+  id: number;
+  kind: "poster" | "youtube";
+  title: string | null;
+  imageUrl: string | null;
+  youtubeId: string | null;
+  durationSeconds: number;
+};
 type DisplayPhase =
   | { type: "normal" }
   | { type: "daily"; name: "Imsak" | "Syuruk" }
@@ -202,9 +211,12 @@ export default function Home() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [prayerSchedule, setPrayerSchedule] = useState<Prayer[]>(FALLBACK_SCHEDULE);
   const [dailyTimes, setDailyTimes] = useState<DailyTimes>(FALLBACK_DAILY_TIMES);
+  const [contentSlides, setContentSlides] = useState<ContentSlide[]>([]);
+  const [ticker, setTicker] = useState("");
   const [activeSlide, setActiveSlide] = useState(0);
   const [availableVersion, setAvailableVersion] = useState<string | null>(null);
   const [isSimulation, setIsSimulation] = useState(false);
+  const contentSignature = useRef("");
   const displayPhase: DisplayPhase = now
     ? getDisplayPhase(now, prayerSchedule, dailyTimes)
     : { type: "normal" };
@@ -226,13 +238,42 @@ export default function Home() {
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     if (displayPhase.type !== "normal") return;
-    const slideDurations = [12000, 12000, 60000];
+    if (!contentSlides.length) return;
+    const duration = Math.max(5, contentSlides[activeSlide]?.durationSeconds || 12) * 1000;
     const slideTimer = window.setTimeout(
-      () => setActiveSlide((current) => (current + 1) % slideDurations.length),
-      slideDurations[activeSlide],
+      () => setActiveSlide((current) => (current + 1) % contentSlides.length),
+      duration,
     );
     return () => window.clearTimeout(slideTimer);
-  }, [activeSlide, displayPhase.type]);
+  }, [activeSlide, contentSlides, displayPhase.type]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadContent = async () => {
+      try {
+        const response = await fetch(CONTENT_API, { cache: "no-store" });
+        if (!response.ok) return;
+        const data = (await response.json()) as { slides?: ContentSlide[]; ticker?: string | null };
+        if (cancelled) return;
+        const nextSignature = JSON.stringify(data);
+        if (nextSignature === contentSignature.current) return;
+        contentSignature.current = nextSignature;
+        setContentSlides(Array.isArray(data.slides) ? data.slides : []);
+        setTicker(typeof data.ticker === "string" ? data.ticker.trim() : "");
+        setActiveSlide(0);
+      } catch {
+        // Jam dan jadwal sholat tetap berjalan tanpa konten tambahan.
+      }
+    };
+
+    void loadContent();
+    const contentTimer = window.setInterval(loadContent, 30 * 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(contentTimer);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -440,7 +481,7 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="hero-grid">
+      <section className={`hero-grid${contentSlides.length ? "" : " content-empty"}`}>
         <div className="clock-panel">
           <div className="clock-label">
             <span /> Waktu sekarang
@@ -469,51 +510,49 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="content-carousel" aria-label="Informasi kegiatan masjid" aria-roledescription="carousel">
-          <div className={`carousel-slide poster-slide${activeSlide === 0 ? " active" : ""}`} aria-hidden={activeSlide !== 0}>
-            <img
-              src="/jadwal-talim-agustus-2026.png"
-              alt="Jadwal Ta’lim Masjid Al-Hidayah bulan Agustus 2026"
-            />
-          </div>
-
-          <div className={`carousel-slide agenda-slide${activeSlide === 1 ? " active" : ""}`} aria-hidden={activeSlide !== 1}>
-            <div>
-              <p className="eyebrow">AGENDA TA’LIM AGUSTUS</p>
-              <h2>Majelis ilmu untuk jamaah dan keluarga</h2>
-            </div>
-            <div className="agenda-list">
-              <div className="agenda-item"><strong>09 Agu</strong><span>Ta’lim Subuh Ahad</span><small>Dr. KH. Kamaludin, MA.</small></div>
-              <div className="agenda-item"><strong>15 Agu</strong><span>Tahsinul Qur’an</span><small>Ust. Iip Ikhwanurrahman</small></div>
-              <div className="agenda-item"><strong>17 Agu</strong><span>Ta’lim malam ba’da Magrib</span><small>Ust. Rahmat Hidayat</small></div>
-            </div>
-          </div>
-
-          <div className={"carousel-slide video-slide" + (activeSlide === 2 ? " active" : "")} aria-hidden={activeSlide !== 2}>
-            <div className="video-player">
-              {activeSlide === 2 && displayPhase.type === "normal" && (
-                <iframe
-                  src="https://www.youtube-nocookie.com/embed/X6AeZWXq_pE?autoplay=1&mute=1&loop=1&playlist=X6AeZWXq_pE&playsinline=1&rel=0"
-                  title="Pengurus DKM Alhidayah 2026–2029"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                />
+        <div
+          className={`content-carousel${contentSlides.length ? "" : " content-empty"}`}
+          aria-label="Informasi kegiatan masjid"
+          aria-roledescription="carousel"
+          aria-hidden={!contentSlides.length}
+        >
+          {contentSlides.map((slide, index) => (
+            <div
+              className={`carousel-slide ${slide.kind === "poster" ? "poster-slide" : "video-slide"}${activeSlide === index ? " active" : ""}`}
+              aria-hidden={activeSlide !== index}
+              key={slide.id}
+            >
+              {slide.kind === "poster" && slide.imageUrl ? (
+                <img src={slide.imageUrl} alt={slide.title || "Poster kegiatan Masjid Al-Hidayah"} />
+              ) : (
+                <div className="video-player">
+                  {activeSlide === index && displayPhase.type === "normal" && slide.youtubeId && (
+                    <iframe
+                      src={`https://www.youtube-nocookie.com/embed/${slide.youtubeId}?autoplay=1&mute=1&loop=1&playlist=${slide.youtubeId}&playsinline=1&rel=0`}
+                      title={slide.title || "Video Masjid Al-Hidayah"}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    />
+                  )}
+                </div>
               )}
             </div>
-          </div>
+          ))}
 
-          <div className="carousel-dots" aria-label="Pilih slide">
-            {[0, 1, 2].map((slide) => (
-              <button
-                className={`carousel-dot${activeSlide === slide ? " active" : ""}`}
-                key={slide}
-                onClick={() => setActiveSlide(slide)}
-                type="button"
-                aria-current={activeSlide === slide ? "true" : undefined}
-                aria-label={`Tampilkan slide ${slide + 1}`}
-              />
-            ))}
-          </div>
+          {contentSlides.length > 0 && (
+            <div className="carousel-dots" aria-label="Pilih slide">
+              {contentSlides.map((slide, index) => (
+                <button
+                  className={`carousel-dot${activeSlide === index ? " active" : ""}`}
+                  key={slide.id}
+                  onClick={() => setActiveSlide(index)}
+                  type="button"
+                  aria-current={activeSlide === index ? "true" : undefined}
+                  aria-label={`Tampilkan slide ${index + 1}`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -557,10 +596,10 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="announcement-bar">
+      <footer className="announcement-bar" hidden={!ticker}>
         <div className="announcement-label"><span aria-hidden="true">●</span> INFO MASJID</div>
         <div className="ticker-window">
-          <p>Mohon menonaktifkan suara ponsel selama berada di dalam masjid &nbsp; • &nbsp; Jaga kebersihan dan ketenangan rumah Allah &nbsp; • &nbsp; Kajian rutin setiap Sabtu ba’da Maghrib</p>
+          <p>{ticker}</p>
         </div>
       </footer>
     </main>

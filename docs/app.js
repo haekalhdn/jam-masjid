@@ -1,7 +1,7 @@
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.7";
+const APP_VERSION = "2026.08.08.8";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
 const CONTENT_REFRESH_MS = 30 * 1000;
 const pageParams = new URLSearchParams(window.location.search);
@@ -360,12 +360,11 @@ document.addEventListener("fullscreenchange", () => {
 });
 
 const carousel = document.querySelector(".content-carousel");
-const defaultPosterSlide = document.querySelector(".poster-slide").cloneNode(true);
-const agendaSlide = document.querySelector(".agenda-slide").cloneNode(true);
-const defaultVideoSlide = document.querySelector(".video-slide").cloneNode(true);
+const heroGrid = document.querySelector(".hero-grid");
+const announcementBar = document.querySelector(".announcement-bar");
 let carouselSlides = [...document.querySelectorAll(".carousel-slide")];
 let carouselDots = [...document.querySelectorAll(".carousel-dot")];
-let slideDurations = [12000, 12000, 60000];
+let slideDurations = [];
 let contentSignature = "";
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 let activeSlide = 0;
@@ -401,7 +400,7 @@ function updateActiveVideoPlayer() {
 
 function scheduleNextSlide() {
   window.clearTimeout(slideTimer);
-  if (reducedMotion || displayMode !== "normal") return;
+  if (reducedMotion || displayMode !== "normal" || !carouselSlides.length) return;
   slideTimer = window.setTimeout(
     () => showSlide((activeSlide + 1) % carouselSlides.length),
     slideDurations[activeSlide] ?? 12000,
@@ -461,12 +460,25 @@ function rebuildCarousel(data) {
   const remotePosters = data.slides.filter((slide) => slide.kind === "poster" && slide.imageUrl);
   const remoteVideos = data.slides.filter((slide) => slide.kind === "youtube" && slide.youtubeId);
   const nextSlides = [
-    ...(remotePosters.length ? remotePosters.map(createPosterSlide) : [defaultPosterSlide.cloneNode(true)]),
-    agendaSlide.cloneNode(true),
-    ...(remoteVideos.length ? remoteVideos.map(createVideoSlide) : [defaultVideoSlide.cloneNode(true)]),
+    ...remotePosters.map(createPosterSlide),
+    ...remoteVideos.map(createVideoSlide),
   ];
 
   carousel.querySelectorAll(".carousel-slide, .carousel-dots").forEach((element) => element.remove());
+  const isEmpty = nextSlides.length === 0;
+  carousel.classList.toggle("content-empty", isEmpty);
+  carousel.setAttribute("aria-hidden", String(isEmpty));
+  heroGrid.classList.toggle("content-empty", isEmpty);
+  if (isEmpty) {
+    carouselSlides = [];
+    carouselDots = [];
+    slideDurations = [];
+    activeSlide = 0;
+    window.clearTimeout(slideTimer);
+    updateActiveVideoPlayer();
+    return;
+  }
+
   nextSlides.forEach((slide) => carousel.append(slide));
 
   const dots = document.createElement("div");
@@ -501,11 +513,11 @@ async function loadRemoteContent() {
     if (nextSignature === contentSignature) return;
     contentSignature = nextSignature;
     rebuildCarousel(data);
-    if (data.ticker) {
-      document.querySelector(".ticker-window p").textContent = data.ticker;
-    }
+    const ticker = typeof data.ticker === "string" ? data.ticker.trim() : "";
+    announcementBar.hidden = !ticker;
+    document.querySelector(".ticker-window p").textContent = ticker;
   } catch {
-    // Konten bawaan tetap tampil saat layanan pembaruan sedang tidak tersedia.
+    // Tampilan utama tetap berjalan saat layanan pembaruan sedang tidak tersedia.
   }
 }
 

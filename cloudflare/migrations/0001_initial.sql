@@ -35,6 +35,5 @@ CREATE TABLE IF NOT EXISTS sessions (
 INSERT OR IGNORE INTO settings(key, value)
 VALUES (
   'ticker',
-  'Mohon menonaktifkan suara ponsel selama berada di dalam masjid • Jaga kebersihan dan ketenangan rumah Allah • Kajian rutin setiap Sabtu ba’da Maghrib'
+  ''
 );
-
