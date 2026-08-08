@@ -69,11 +69,11 @@ const jsonHeaders = {
 const menuKeyboard = {
   keyboard: [
     [{ text: "🖼 Tambah poster" }, { text: "🗑 Hapus poster" }],
-    [{ text: "▶️ Ganti YouTube" }, { text: "🕋 Mode Jumat" }],
+    [{ text: "▶️ Ganti YouTube" }, { text: "🗑 Hapus YouTube" }],
     [{ text: "📢 Ubah info TV" }, { text: "🧹 Sembunyikan info" }],
     [{ text: "⏱ Atur iqomah" }, { text: "🕌 Durasi sholat" }],
-    [{ text: "👤 Undang admin" }, { text: "📋 Lihat konten" }],
-    [{ text: "❌ Batal" }],
+    [{ text: "🕋 Mode Jumat" }, { text: "👤 Undang admin" }],
+    [{ text: "📋 Lihat konten" }, { text: "❌ Batal" }],
   ],
   resize_keyboard: true,
   is_persistent: true,
@@ -431,6 +431,20 @@ async function saveYouTube(env: Env, message: TelegramMessage, userId: number, t
   await sendMessage(env, message.chat.id, "✅ Video YouTube sudah diganti. Layar TV akan memperbaruinya otomatis.");
 }
 
+async function clearYouTube(env: Env, chatId: number, userId: number) {
+  const result = await env.DB.prepare(
+    "UPDATE slides SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE kind = 'youtube' AND active = 1",
+  ).run();
+  await clearSession(env, userId);
+  await sendMessage(
+    env,
+    chatId,
+    result.meta.changes
+      ? "✅ YouTube sudah dihapus dari rotasi. Layar TV akan memperbarui otomatis."
+      : "Tidak ada YouTube aktif di layar saat ini.",
+  );
+}
+
 async function saveTicker(env: Env, message: TelegramMessage, userId: number, text: string) {
   const value = text.trim().slice(0, 800);
   if (value.length < 3) {
@@ -705,6 +719,11 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate) {
 
   if (text === "🗑 Hapus poster" || text === "/hapusposter") {
     await promptDeletePoster(env, message.chat.id, user.id);
+    return;
+  }
+
+  if (text === "🗑 Hapus YouTube" || text === "/hapusyoutube") {
+    await clearYouTube(env, message.chat.id, user.id);
     return;
   }
 
