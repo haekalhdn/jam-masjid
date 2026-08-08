@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#061c18" />
+    <title>Jam Iqomah | Masjid Jami’ Al-Hidayah</title>
+    <meta
+      name="description"
+      content="Layar informasi waktu sholat dan hitung mundur iqomah Masjid Jami’ Al-Hidayah."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <main class="display-shell">
+      <div class="ambient ambient-one"></div>
+      <div class="ambient ambient-two"></div>
+
+      <header class="topbar">
+        <div class="brand">
+          <div>
+            <p class="eyebrow">SELAMAT DATANG DI</p>
+            <h1>Masjid Jami’ Al-Hidayah</h1>
+            <p class="brand-location">Bedahan • Sawangan • Depok</p>
+          </div>
+        </div>
+
+        <div class="center-logo">
+          <img src="./logo-masjid-al-hidayah.png" alt="Logo Masjid Jami Al-Hidayah" />
+        </div>
+
+        <div class="topbar-actions">
+          <div class="live-status">
+            <span class="status-dot"></span>
+            Waktu Indonesia Barat
+          </div>
+          <button class="fullscreen-button" id="fullscreen-button" type="button">
+            <span class="fullscreen-icon" aria-hidden="true">↗</span>
+            <span class="fullscreen-text">Layar penuh</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="hero-grid">
+        <div class="clock-panel">
+          <div class="clock-label"><span></span> Waktu sekarang</div>
+          <div class="clock" id="clock" aria-label="Memuat waktu">
+            <span id="clock-hour">--</span><i>:</i><span id="clock-minute">--</span>
+            <small id="clock-second">--</small>
+          </div>
+          <div class="date-row">
+            <p id="current-date">Memuat tanggal…</p>
+            <span aria-hidden="true"></span>
+            <p id="hijri-date">Memuat tanggal Hijriah…</p>
+          </div>
+        </div>
+
+        <aside class="countdown-panel">
+          <div class="ornament" aria-hidden="true">✦</div>
+          <p class="countdown-kicker">MENUJU IQOMAH</p>
+          <h2 id="next-prayer">—</h2>
+          <div class="countdown-time" id="countdown">--:--:--</div>
+          <div class="countdown-labels"><span>Jam</span><span>Menit</span><span>Detik</span></div>
+          <p class="iqamah-note">
+            Adzan <span id="next-adhan">--:--</span> <span>•</span>
+            Iqomah <span id="next-iqamah">--:--</span>
+          </p>
+        </aside>
+      </section>
+
+      <section class="schedule-section" aria-labelledby="schedule-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">JADWAL HARI INI</p>
+            <h2 id="schedule-title">Waktu Sholat</h2>
+          </div>
+          <p class="section-reminder">“Luruskan dan rapatkan shaf.”</p>
+        </div>
+
+        <div class="prayer-grid">
+          <article class="prayer-card" data-prayer="Subuh">
+            <span class="next-badge">BERIKUTNYA</span>
+            <div class="prayer-card-top"><span class="prayer-icon">◒</span><h3>Subuh</h3></div>
+            <div class="prayer-times"><div><span>Adzan</span><strong>04:38</strong></div><div class="time-divider"></div><div><span>Iqomah</span><strong>04:50</strong></div></div>
+          </article>
+          <article class="prayer-card" data-prayer="Dzuhur">
+            <span class="next-badge">BERIKUTNYA</span>
+            <div class="prayer-card-top"><span class="prayer-icon">☼</span><h3>Dzuhur</h3></div>
+            <div class="prayer-times"><div><span>Adzan</span><strong>11:58</strong></div><div class="time-divider"></div><div><span>Iqomah</span><strong>12:10</strong></div></div>
+          </article>
+          <article class="prayer-card" data-prayer="Ashar">
+            <span class="next-badge">BERIKUTNYA</span>
+            <div class="prayer-card-top"><span class="prayer-icon">☼</span><h3>Ashar</h3></div>
+            <div class="prayer-times"><div><span>Adzan</span><strong>15:18</strong></div><div class="time-divider"></div><div><span>Iqomah</span><strong>15:30</strong></div></div>
+          </article>
+          <article class="prayer-card" data-prayer="Maghrib">
+            <span class="next-badge">BERIKUTNYA</span>
+            <div class="prayer-card-top"><span class="prayer-icon">◓</span><h3>Maghrib</h3></div>
+            <div class="prayer-times"><div><span>Adzan</span><strong>17:52</strong></div><div class="time-divider"></div><div><span>Iqomah</span><strong>18:00</strong></div></div>
+          </article>
+          <article class="prayer-card" data-prayer="Isya">
+            <span class="next-badge">BERIKUTNYA</span>
+            <div class="prayer-card-top"><span class="prayer-icon">☼</span><h3>Isya</h3></div>
+            <div class="prayer-times"><div><span>Adzan</span><strong>19:04</strong></div><div class="time-divider"></div><div><span>Iqomah</span><strong>19:15</strong></div></div>
+          </article>
+        </div>
+      </section>
+
+      <footer class="announcement-bar">
+        <div class="announcement-label"><span aria-hidden="true">●</span> INFO MASJID</div>
+        <div class="ticker-window"><p>Mohon menonaktifkan suara ponsel selama berada di dalam masjid &nbsp; • &nbsp; Jaga kebersihan dan ketenangan rumah Allah &nbsp; • &nbsp; Kajian rutin setiap Sabtu ba’da Maghrib</p></div>
+      </footer>
+    </main>
+  </body>
+</html>
