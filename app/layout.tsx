@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Jam Iqomah | Masjid Al-Hikmah",
-  description: "Layar informasi waktu sholat dan hitung mundur iqomah Masjid Al-Hikmah.",
+  title: "Jam Iqomah | Masjid Jami’ Al-Hidayah",
+  description: "Layar informasi waktu sholat dan hitung mundur iqomah Masjid Jami’ Al-Hidayah.",
 };
 
 export default function RootLayout({

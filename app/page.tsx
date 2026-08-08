@@ -131,13 +131,18 @@ export default function Home() {
 
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark" aria-hidden="true">
-            <span className="crescent">☾</span>
-          </div>
           <div>
             <p className="eyebrow">SELAMAT DATANG DI</p>
-            <h1>Masjid Al-Hikmah</h1>
+            <h1>Masjid Jami’ Al-Hidayah</h1>
+            <p className="brand-location">Bedahan • Sawangan • Depok</p>
           </div>
+        </div>
+
+        <div className="center-logo">
+          <img
+            src="/logo-masjid-al-hidayah.png"
+            alt="Logo Masjid Jami Al-Hidayah"
+          />
         </div>
 
         <div className="topbar-actions">
@@ -146,8 +151,8 @@ export default function Home() {
             Waktu Indonesia Barat
           </div>
           <button className="fullscreen-button" onClick={toggleFullscreen} type="button">
-            <span aria-hidden="true">{isFullscreen ? "↙" : "↗"}</span>
-            {isFullscreen ? "Keluar" : "Layar penuh"}
+            <span className="fullscreen-icon" aria-hidden="true">{isFullscreen ? "↙" : "↗"}</span>
+            <span className="fullscreen-text">{isFullscreen ? "Keluar" : "Layar penuh"}</span>
           </button>
         </div>
       </header>
