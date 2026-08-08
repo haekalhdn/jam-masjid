@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.2";
+const APP_VERSION = "2026.08.08.3";
 
 type Prayer = { name: string; adhan: string; iqamah: string };
 type DisplayPhase =
@@ -337,7 +337,7 @@ export default function Home() {
       {(displayPhase.type === "adhan" || displayPhase.type === "countdown") && (
         <section className={"transition-screen " + displayPhase.type} aria-live="polite" aria-atomic="true">
           <p className="transition-kicker">
-            {displayPhase.type === "adhan" ? "WAKTU SHOLAT" : "MENUJU IQOMAH"}
+            {displayPhase.type === "adhan" ? "WAKTU SHOLAT" : "IQOMAH"}
           </p>
           <h2>
             {displayPhase.type === "adhan"

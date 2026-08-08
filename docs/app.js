@@ -1,7 +1,7 @@
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.2";
+const APP_VERSION = "2026.08.08.3";
 const pageParams = new URLSearchParams(window.location.search);
 const simulationPrayer = pageParams.get("demo") === "maghrib" ? "Maghrib" : null;
 const simulationRun = pageParams.get("run") || "default";
@@ -256,7 +256,7 @@ function updateDisplay() {
 
   if (showTransition) {
     const isAdhan = phase.type === "adhan";
-    transitionKicker.textContent = isAdhan ? "WAKTU SHOLAT" : "MENUJU IQOMAH";
+    transitionKicker.textContent = isAdhan ? "WAKTU SHOLAT" : "IQOMAH";
     transitionTitle.textContent = (isAdhan ? "Sudah Masuk Waktu " : "Iqomah ") + phase.prayer.name;
     transitionCountdown.hidden = isAdhan;
     if (!isAdhan) transitionCountdown.textContent = formatCountdown(phase.secondsRemaining);
