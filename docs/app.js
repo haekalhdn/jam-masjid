@@ -1,7 +1,8 @@
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.11";
+const APP_VERSION = "2026.08.08.12";
+const UPDATE_ATTEMPT_KEY = "jam-masjid-update-attempt";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
 const CONTENT_REFRESH_MS = 30 * 1000;
 const pageParams = new URLSearchParams(window.location.search);
@@ -215,6 +216,12 @@ function formatCountdown(totalSeconds) {
 }
 
 function applyUpdate(version) {
+  try {
+    if (window.sessionStorage.getItem(UPDATE_ATTEMPT_KEY) === version) return;
+    window.sessionStorage.setItem(UPDATE_ATTEMPT_KEY, version);
+  } catch {
+    // Lanjutkan pembaruan jika penyimpanan browser tidak tersedia.
+  }
   const nextUrl = new URL(window.location.href);
   nextUrl.searchParams.set("v", version);
   window.location.replace(nextUrl.toString());
@@ -225,7 +232,22 @@ async function checkForUpdates() {
     const response = await fetch("./version.json?t=" + Date.now(), { cache: "no-store" });
     if (!response.ok) return;
     const data = await response.json();
-    if (!data.version || data.version === APP_VERSION) return;
+    if (!data.version) return;
+    if (data.version === APP_VERSION) {
+      try {
+        if (window.sessionStorage.getItem(UPDATE_ATTEMPT_KEY) === APP_VERSION) {
+          window.sessionStorage.removeItem(UPDATE_ATTEMPT_KEY);
+        }
+      } catch {
+        // Tidak perlu membersihkan jika penyimpanan browser tidak tersedia.
+      }
+      return;
+    }
+    try {
+      if (window.sessionStorage.getItem(UPDATE_ATTEMPT_KEY) === data.version) return;
+    } catch {
+      // Tetap lanjutkan pemeriksaan bila penyimpanan browser tidak tersedia.
+    }
 
     if (displayMode === "normal") {
       applyUpdate(data.version);

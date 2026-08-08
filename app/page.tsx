@@ -6,7 +6,8 @@ const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
-const APP_VERSION = "2026.08.08.11";
+const APP_VERSION = "2026.08.08.12";
+const UPDATE_ATTEMPT_KEY = "jam-masjid-update-attempt";
 
 type PrayerName = "Subuh" | "Dzuhur" | "Ashar" | "Maghrib" | "Isya";
 type TimingMap = Record<PrayerName, number>;
@@ -592,9 +593,23 @@ export default function Home() {
         const response = await fetch("/version.json?t=" + Date.now(), { cache: "no-store" });
         if (!response.ok) return;
         const data = (await response.json()) as { version?: string };
-        if (!cancelled && data.version && data.version !== APP_VERSION) {
-          setAvailableVersion(data.version);
+        if (cancelled || !data.version) return;
+        if (data.version === APP_VERSION) {
+          try {
+            if (window.sessionStorage.getItem(UPDATE_ATTEMPT_KEY) === APP_VERSION) {
+              window.sessionStorage.removeItem(UPDATE_ATTEMPT_KEY);
+            }
+          } catch {
+            // Tidak perlu membersihkan jika penyimpanan browser tidak tersedia.
+          }
+          return;
         }
+        try {
+          if (window.sessionStorage.getItem(UPDATE_ATTEMPT_KEY) === data.version) return;
+        } catch {
+          // Tetap lanjutkan pemeriksaan bila penyimpanan browser tidak tersedia.
+        }
+        setAvailableVersion(data.version);
       } catch {
         // Pemeriksaan berikutnya akan mencoba lagi saat koneksi tersedia.
       }
@@ -611,6 +626,12 @@ export default function Home() {
 
   useEffect(() => {
     if (!availableVersion || displayPhase.type !== "normal") return;
+    try {
+      if (window.sessionStorage.getItem(UPDATE_ATTEMPT_KEY) === availableVersion) return;
+      window.sessionStorage.setItem(UPDATE_ATTEMPT_KEY, availableVersion);
+    } catch {
+      // Lanjutkan pembaruan jika penyimpanan browser tidak tersedia.
+    }
     const nextUrl = new URL(window.location.href);
     nextUrl.searchParams.set("v", availableVersion);
     window.location.replace(nextUrl.toString());
