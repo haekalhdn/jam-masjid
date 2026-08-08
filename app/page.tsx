@@ -6,9 +6,11 @@ const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
-const APP_VERSION = "2026.08.08.8";
+const APP_VERSION = "2026.08.08.9";
 
-type Prayer = { name: string; adhan: string; iqamah: string };
+type PrayerName = "Subuh" | "Dzuhur" | "Ashar" | "Maghrib" | "Isya";
+type TimingMap = Record<PrayerName, number>;
+type Prayer = { name: PrayerName; adhan: string; iqamah: string };
 type DailyTimes = { imsak: string; syuruk: string };
 type ContentSlide = {
   id: number;
@@ -17,6 +19,20 @@ type ContentSlide = {
   imageUrl: string | null;
   youtubeId: string | null;
   durationSeconds: number;
+};
+const DEFAULT_IQAMAH_DELAYS: TimingMap = {
+  Subuh: 7,
+  Dzuhur: 7,
+  Ashar: 7,
+  Maghrib: 7,
+  Isya: 7,
+};
+const DEFAULT_PRAYER_DURATIONS: TimingMap = {
+  Subuh: 10,
+  Dzuhur: 10,
+  Ashar: 10,
+  Maghrib: 10,
+  Isya: 10,
 };
 type DisplayPhase =
   | { type: "normal" }
@@ -52,18 +68,27 @@ function addMinutes(time: string, minutesToAdd: number) {
   return `${String(Math.floor(totalMinutes / 60)).padStart(2, "0")}:${String(totalMinutes % 60).padStart(2, "0")}`;
 }
 
-function scheduleFromApi(jadwal: Record<string, string>): Prayer[] {
-  const prayerData = [
-    { name: "Subuh", key: "subuh", delay: 7 },
-    { name: "Dzuhur", key: "dzuhur", delay: 7 },
-    { name: "Ashar", key: "ashar", delay: 7 },
-    { name: "Maghrib", key: "maghrib", delay: 7 },
-    { name: "Isya", key: "isya", delay: 7 },
+function normalizeTimingMap(values: Partial<TimingMap> | undefined, defaults: TimingMap): TimingMap {
+  return Object.fromEntries(
+    (Object.keys(defaults) as PrayerName[]).map((name) => {
+      const candidate = Number(values?.[name]);
+      return [name, Number.isFinite(candidate) ? candidate : defaults[name]];
+    }),
+  ) as TimingMap;
+}
+
+function scheduleFromApi(jadwal: Record<string, string>, iqamahDelays: TimingMap): Prayer[] {
+  const prayerData: Array<{ name: PrayerName; key: string }> = [
+    { name: "Subuh", key: "subuh" },
+    { name: "Dzuhur", key: "dzuhur" },
+    { name: "Ashar", key: "ashar" },
+    { name: "Maghrib", key: "maghrib" },
+    { name: "Isya", key: "isya" },
   ];
 
-  return prayerData.map(({ name, key, delay }) => {
+  return prayerData.map(({ name, key }) => {
     const adhan = normalizeTime(jadwal[key]);
-    return { name, adhan, iqamah: addMinutes(adhan, delay) };
+    return { name, adhan, iqamah: addMinutes(adhan, iqamahDelays[name]) };
   });
 }
 
@@ -151,12 +176,12 @@ function getDisplayPhase(
   date: Date,
   prayerSchedule: Prayer[],
   dailyTimes: DailyTimes,
+  prayerDurations: TimingMap,
 ): DisplayPhase {
   const { hours, minutes, seconds } = getTimeParts(date);
   const currentSeconds = hours * 3600 + minutes * 60 + seconds;
   const adhanNoticeDuration = 30;
   const shafNoticeDuration = 10;
-  const prayerModeDuration = 10 * 60;
 
   const dailyNotices: Array<{ name: "Imsak" | "Syuruk"; time: string }> = [
     { name: "Imsak", time: dailyTimes.imsak },
@@ -172,6 +197,7 @@ function getDisplayPhase(
   }
 
   for (const prayer of prayerSchedule) {
+    const prayerModeDuration = prayerDurations[prayer.name] * 60;
     const [adhanHour, adhanMinute] = prayer.adhan.split(":").map(Number);
     const [iqamahHour, iqamahMinute] = prayer.iqamah.split(":").map(Number);
     const adhanSeconds = adhanHour * 3600 + adhanMinute * 60;
@@ -213,12 +239,14 @@ export default function Home() {
   const [dailyTimes, setDailyTimes] = useState<DailyTimes>(FALLBACK_DAILY_TIMES);
   const [contentSlides, setContentSlides] = useState<ContentSlide[]>([]);
   const [ticker, setTicker] = useState("");
+  const [prayerDurations, setPrayerDurations] = useState<TimingMap>(DEFAULT_PRAYER_DURATIONS);
   const [activeSlide, setActiveSlide] = useState(0);
   const [availableVersion, setAvailableVersion] = useState<string | null>(null);
   const [isSimulation, setIsSimulation] = useState(false);
   const contentSignature = useRef("");
+  const iqamahDelaysRef = useRef<TimingMap>(DEFAULT_IQAMAH_DELAYS);
   const displayPhase: DisplayPhase = now
-    ? getDisplayPhase(now, prayerSchedule, dailyTimes)
+    ? getDisplayPhase(now, prayerSchedule, dailyTimes, prayerDurations)
     : { type: "normal" };
 
   useEffect(() => {
@@ -254,11 +282,26 @@ export default function Home() {
       try {
         const response = await fetch(CONTENT_API, { cache: "no-store" });
         if (!response.ok) return;
-        const data = (await response.json()) as { slides?: ContentSlide[]; ticker?: string | null };
+        const data = (await response.json()) as {
+          slides?: ContentSlide[];
+          ticker?: string | null;
+          iqamahDelays?: Partial<TimingMap>;
+          prayerDurations?: Partial<TimingMap>;
+        };
         if (cancelled) return;
         const nextSignature = JSON.stringify(data);
         if (nextSignature === contentSignature.current) return;
         contentSignature.current = nextSignature;
+        const nextIqamahDelays = normalizeTimingMap(data.iqamahDelays, DEFAULT_IQAMAH_DELAYS);
+        const nextPrayerDurations = normalizeTimingMap(data.prayerDurations, DEFAULT_PRAYER_DURATIONS);
+        iqamahDelaysRef.current = nextIqamahDelays;
+        setPrayerDurations(nextPrayerDurations);
+        setPrayerSchedule((current) =>
+          current.map((prayer) => ({
+            ...prayer,
+            iqamah: addMinutes(prayer.adhan, nextIqamahDelays[prayer.name]),
+          })),
+        );
         setContentSlides(Array.isArray(data.slides) ? data.slides : []);
         setTicker(typeof data.ticker === "string" ? data.ticker.trim() : "");
         setActiveSlide(0);
@@ -302,7 +345,11 @@ export default function Home() {
 
       return schedule.map((prayer) =>
         prayer.name === simulationPrayer
-          ? { ...prayer, adhan: demoAdhan, iqamah: addMinutes(demoAdhan, 7) }
+          ? {
+              ...prayer,
+              adhan: demoAdhan,
+              iqamah: addMinutes(demoAdhan, iqamahDelaysRef.current[prayer.name]),
+            }
           : prayer,
       );
     };
@@ -325,7 +372,7 @@ export default function Home() {
               applySimulation(
               parsed.schedule.map((prayer) => ({
                 ...prayer,
-                iqamah: addMinutes(prayer.adhan, 7),
+                iqamah: addMinutes(prayer.adhan, iqamahDelaysRef.current[prayer.name]),
               })),
               ),
             );
@@ -337,7 +384,7 @@ export default function Home() {
         if (!response.ok) throw new Error("Jadwal Depok tidak tersedia");
 
         const data = (await response.json()) as { jadwal: Record<string, string> };
-        const schedule = scheduleFromApi(data.jadwal);
+        const schedule = scheduleFromApi(data.jadwal, iqamahDelaysRef.current);
         const nextDailyTimes = dailyTimesFromApi(data.jadwal);
 
         if (!cancelled) {
@@ -565,7 +612,7 @@ export default function Home() {
           <p className={"section-reminder" + (isSimulation ? " simulation" : "")}>
             {isSimulation
               ? "MODE SIMULASI • Maghrib dimulai sekitar 3 menit lagi"
-              : "Kemenag RI • Iqomah 7 menit setelah adzan"}
+              : "Kemenag RI • Iqomah sesuai pengaturan DKM"}
           </p>
         </div>
 

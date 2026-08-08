@@ -31,6 +31,24 @@ type TelegramMessage = {
 type TelegramUpdate = { message?: TelegramMessage };
 
 type TelegramResponse<T> = { ok: boolean; result?: T; description?: string };
+type PrayerName = "Subuh" | "Dzuhur" | "Ashar" | "Maghrib" | "Isya";
+type TimingMap = Record<PrayerName, number>;
+
+const PRAYER_NAMES: PrayerName[] = ["Subuh", "Dzuhur", "Ashar", "Maghrib", "Isya"];
+const DEFAULT_IQAMAH_DELAYS: TimingMap = {
+  Subuh: 7,
+  Dzuhur: 7,
+  Ashar: 7,
+  Maghrib: 7,
+  Isya: 7,
+};
+const DEFAULT_PRAYER_DURATIONS: TimingMap = {
+  Subuh: 10,
+  Dzuhur: 10,
+  Ashar: 10,
+  Maghrib: 10,
+  Isya: 10,
+};
 
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
@@ -43,6 +61,7 @@ const menuKeyboard = {
   keyboard: [
     [{ text: "🖼 Tambah poster" }, { text: "▶️ Ganti YouTube" }],
     [{ text: "📢 Ubah info TV" }, { text: "🧹 Sembunyikan info" }],
+    [{ text: "⏱ Atur iqomah" }, { text: "🕌 Durasi sholat" }],
     [{ text: "📋 Lihat konten" }, { text: "❌ Batal" }],
   ],
   resize_keyboard: true,
@@ -68,6 +87,66 @@ function safeEqual(left: string, right: string) {
 function displayName(user: TelegramUser) {
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
   return fullName || user.username || String(user.id);
+}
+
+function parseTimingSetting(value: string | undefined, defaults: TimingMap): TimingMap {
+  try {
+    const parsed = value ? (JSON.parse(value) as Partial<TimingMap>) : {};
+    return Object.fromEntries(
+      PRAYER_NAMES.map((name) => {
+        const candidate = Number(parsed[name]);
+        return [name, Number.isFinite(candidate) ? candidate : defaults[name]];
+      }),
+    ) as TimingMap;
+  } catch {
+    return { ...defaults };
+  }
+}
+
+function formatTimingMap(values: TimingMap) {
+  return PRAYER_NAMES.map((name) => `${name} ${values[name]} menit`).join("\n");
+}
+
+function normalizePrayerName(value: string): PrayerName | null {
+  const normalized = value.toLowerCase().replace(/[^a-z]/g, "");
+  const names: Record<string, PrayerName> = {
+    subuh: "Subuh",
+    dzuhur: "Dzuhur",
+    zuhur: "Dzuhur",
+    ashar: "Ashar",
+    asar: "Ashar",
+    maghrib: "Maghrib",
+    magrib: "Maghrib",
+    isya: "Isya",
+  };
+  return names[normalized] || null;
+}
+
+function parseTimingUpdates(text: string, minimum: number, maximum: number) {
+  const updates: Partial<TimingMap> = {};
+  const invalid: string[] = [];
+  for (const line of text.split(/[\n,;]+/).map((part) => part.trim()).filter(Boolean)) {
+    const match = line.match(/^([A-Za-z']+)\s*[:=\-]?\s*(\d{1,3})(?:\s*menit)?$/i);
+    const prayer = match ? normalizePrayerName(match[1]) : null;
+    const minutes = match ? Number(match[2]) : Number.NaN;
+    if (!prayer || !Number.isInteger(minutes) || minutes < minimum || minutes > maximum) {
+      invalid.push(line);
+      continue;
+    }
+    updates[prayer] = minutes;
+  }
+  return { updates, invalid };
+}
+
+async function getTimingSettings(env: Env) {
+  const rows = await env.DB.prepare(
+    "SELECT key, value FROM settings WHERE key IN ('iqamah_delays', 'prayer_durations')",
+  ).all<{ key: string; value: string }>();
+  const values = Object.fromEntries(rows.results.map((row) => [row.key, row.value]));
+  return {
+    iqamahDelays: parseTimingSetting(values.iqamah_delays, DEFAULT_IQAMAH_DELAYS),
+    prayerDurations: parseTimingSetting(values.prayer_durations, DEFAULT_PRAYER_DURATIONS),
+  };
 }
 
 function extractYouTubeId(input: string) {
@@ -171,10 +250,13 @@ async function getSession(env: Env, userId: number) {
 }
 
 async function listContent(env: Env, chatId: number) {
-  const slides = await env.DB.prepare(
-    "SELECT id, kind, title, youtube_id FROM slides WHERE active = 1 ORDER BY sort_order, id",
-  ).all<{ id: number; kind: string; title: string | null; youtube_id: string | null }>();
-  const ticker = await env.DB.prepare("SELECT value FROM settings WHERE key = 'ticker'").first<{ value: string }>();
+  const [slides, ticker, timings] = await Promise.all([
+    env.DB.prepare(
+      "SELECT id, kind, title, youtube_id FROM slides WHERE active = 1 ORDER BY sort_order, id",
+    ).all<{ id: number; kind: string; title: string | null; youtube_id: string | null }>(),
+    env.DB.prepare("SELECT value FROM settings WHERE key = 'ticker'").first<{ value: string }>(),
+    getTimingSettings(env),
+  ]);
   const slideText = slides.results.length
     ? slides.results
         .map((slide) =>
@@ -188,7 +270,7 @@ async function listContent(env: Env, chatId: number) {
   await sendMessage(
     env,
     chatId,
-    `<b>Konten layar</b>\n${slideText}\n\n<b>Info berjalan</b>\n${ticker?.value || "Tidak ditampilkan"}\n\nUntuk menghapus slide, kirim <code>/hapus ID</code>.`,
+    `<b>Konten layar</b>\n${slideText}\n\n<b>Info berjalan</b>\n${ticker?.value || "Tidak ditampilkan"}\n\n<b>Jeda iqomah</b>\n${formatTimingMap(timings.iqamahDelays)}\n\n<b>Durasi mode sholat</b>\n${formatTimingMap(timings.prayerDurations)}\n\nUntuk menghapus slide, kirim <code>/hapus ID</code>.`,
   );
 }
 
@@ -287,6 +369,62 @@ async function clearTicker(env: Env, chatId: number, userId: number) {
   await sendMessage(env, chatId, "✅ Info bagian bawah sudah disembunyikan.");
 }
 
+async function promptTimingSetting(
+  env: Env,
+  chatId: number,
+  userId: number,
+  kind: "iqamah" | "prayer_duration",
+) {
+  const timings = await getTimingSettings(env);
+  const isIqamah = kind === "iqamah";
+  const current = isIqamah ? timings.iqamahDelays : timings.prayerDurations;
+  await setSession(env, userId, kind);
+  await sendMessage(
+    env,
+    chatId,
+    `<b>${isIqamah ? "Jeda iqomah setelah adzan" : "Durasi mode sholat"}</b>\n${formatTimingMap(current)}\n\nKirim satu atau beberapa baris yang ingin diubah, contoh:\n<code>Subuh 10\nMaghrib 5</code>`,
+  );
+}
+
+async function saveTimingSetting(
+  env: Env,
+  message: TelegramMessage,
+  userId: number,
+  text: string,
+  kind: "iqamah" | "prayer_duration",
+) {
+  const isIqamah = kind === "iqamah";
+  const minimum = isIqamah ? 1 : 5;
+  const maximum = isIqamah ? 60 : 90;
+  const { updates, invalid } = parseTimingUpdates(text, minimum, maximum);
+  if (!Object.keys(updates).length || invalid.length) {
+    await sendMessage(
+      env,
+      message.chat.id,
+      `Format belum terbaca. Gunakan contoh <code>Subuh 10</code>. Batas ${minimum}–${maximum} menit.`,
+    );
+    return;
+  }
+
+  const timings = await getTimingSettings(env);
+  const current = isIqamah ? timings.iqamahDelays : timings.prayerDurations;
+  const next = { ...current, ...updates };
+  const key = isIqamah ? "iqamah_delays" : "prayer_durations";
+  await env.DB.prepare(
+    `INSERT INTO settings(key, value, updated_at)
+     VALUES (?1, ?2, CURRENT_TIMESTAMP)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`,
+  )
+    .bind(key, JSON.stringify(next))
+    .run();
+  await clearSession(env, userId);
+  await sendMessage(
+    env,
+    message.chat.id,
+    `✅ ${isIqamah ? "Jeda iqomah" : "Durasi mode sholat"} sudah diperbarui.\n\n${formatTimingMap(next)}`,
+  );
+}
+
 async function deleteSlide(env: Env, message: TelegramMessage, idText: string) {
   const id = Number(idText);
   if (!Number.isInteger(id) || id <= 0) {
@@ -359,6 +497,16 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate) {
     return;
   }
 
+  if (text === "⏱ Atur iqomah" || text === "/iqomah") {
+    await promptTimingSetting(env, message.chat.id, user.id, "iqamah");
+    return;
+  }
+
+  if (text === "🕌 Durasi sholat" || text === "/durasisholat") {
+    await promptTimingSetting(env, message.chat.id, user.id, "prayer_duration");
+    return;
+  }
+
   if (text.startsWith("/hapus ")) {
     await deleteSlide(env, message, text.slice(7).trim());
     return;
@@ -389,6 +537,10 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate) {
     await saveYouTube(env, message, user.id, text);
   } else if (session === "ticker" && text) {
     await saveTicker(env, message, user.id, text);
+  } else if (session === "iqamah" && text) {
+    await saveTimingSetting(env, message, user.id, text, "iqamah");
+  } else if (session === "prayer_duration" && text) {
+    await saveTimingSetting(env, message, user.id, text, "prayer_duration");
   } else {
     await sendMessage(env, message.chat.id, "Pilih salah satu menu di bawah ya.");
   }
@@ -396,7 +548,7 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate) {
 
 async function publicDisplay(env: Env, request: Request) {
   const url = new URL(request.url);
-  const [slides, ticker] = await Promise.all([
+  const [slides, settings] = await Promise.all([
     env.DB.prepare(
       `SELECT id, kind, title, media_key, youtube_id, duration_seconds
        FROM slides WHERE active = 1 ORDER BY sort_order, id`,
@@ -408,11 +560,19 @@ async function publicDisplay(env: Env, request: Request) {
       youtube_id: string | null;
       duration_seconds: number;
     }>(),
-    env.DB.prepare("SELECT value, updated_at FROM settings WHERE key = 'ticker'").first<{
+    env.DB.prepare(
+      "SELECT key, value, updated_at FROM settings WHERE key IN ('ticker', 'iqamah_delays', 'prayer_durations')",
+    ).all<{
+      key: string;
       value: string;
       updated_at: string;
     }>(),
   ]);
+  const settingValues = Object.fromEntries(settings.results.map((row) => [row.key, row.value]));
+  const updatedAt = settings.results
+    .map((row) => row.updated_at)
+    .sort()
+    .at(-1) || null;
 
   return json(
     {
@@ -424,8 +584,10 @@ async function publicDisplay(env: Env, request: Request) {
         youtubeId: slide.youtube_id,
         durationSeconds: slide.duration_seconds,
       })),
-      ticker: ticker?.value || null,
-      updatedAt: ticker?.updated_at || null,
+      ticker: settingValues.ticker || null,
+      iqamahDelays: parseTimingSetting(settingValues.iqamah_delays, DEFAULT_IQAMAH_DELAYS),
+      prayerDurations: parseTimingSetting(settingValues.prayer_durations, DEFAULT_PRAYER_DURATIONS),
+      updatedAt,
     },
     200,
     { "cache-control": "no-store" },

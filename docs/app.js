@@ -1,13 +1,15 @@
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.8";
+const APP_VERSION = "2026.08.08.9";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
 const CONTENT_REFRESH_MS = 30 * 1000;
 const pageParams = new URLSearchParams(window.location.search);
 const simulationPrayer = pageParams.get("demo") === "maghrib" ? "Maghrib" : null;
 const simulationRun = pageParams.get("run") || "default";
 const simulationStorageKey = "jam-masjid-demo-maghrib-" + simulationRun;
+const DEFAULT_IQAMAH_DELAYS = { Subuh: 7, Dzuhur: 7, Ashar: 7, Maghrib: 7, Isya: 7 };
+const DEFAULT_PRAYER_DURATIONS = { Subuh: 10, Dzuhur: 10, Ashar: 10, Maghrib: 10, Isya: 10 };
 
 let prayerSchedule = [
   { name: "Subuh", adhan: "04:46", iqamah: "04:53" },
@@ -17,6 +19,8 @@ let prayerSchedule = [
   { name: "Isya", adhan: "19:09", iqamah: "19:16" },
 ];
 let dailyTimes = { imsak: "04:36", syuruk: "05:59" };
+let iqamahDelays = { ...DEFAULT_IQAMAH_DELAYS };
+let prayerDurations = { ...DEFAULT_PRAYER_DURATIONS };
 let displayMode = "normal";
 let pendingVersion = null;
 
@@ -37,16 +41,25 @@ function addMinutes(time, minutesToAdd) {
   return `${String(Math.floor(totalMinutes / 60)).padStart(2, "0")}:${String(totalMinutes % 60).padStart(2, "0")}`;
 }
 
+function normalizeTimingMap(values, defaults) {
+  return Object.fromEntries(
+    Object.keys(defaults).map((name) => {
+      const candidate = Number(values?.[name]);
+      return [name, Number.isFinite(candidate) ? candidate : defaults[name]];
+    }),
+  );
+}
+
 function scheduleFromApi(jadwal) {
   return [
-    { name: "Subuh", key: "subuh", delay: 7 },
-    { name: "Dzuhur", key: "dzuhur", delay: 7 },
-    { name: "Ashar", key: "ashar", delay: 7 },
-    { name: "Maghrib", key: "maghrib", delay: 7 },
-    { name: "Isya", key: "isya", delay: 7 },
-  ].map(({ name, key, delay }) => {
+    { name: "Subuh", key: "subuh" },
+    { name: "Dzuhur", key: "dzuhur" },
+    { name: "Ashar", key: "ashar" },
+    { name: "Maghrib", key: "maghrib" },
+    { name: "Isya", key: "isya" },
+  ].map(({ name, key }) => {
     const adhan = normalizeTime(jadwal[key]);
-    return { name, adhan, iqamah: addMinutes(adhan, delay) };
+    return { name, adhan, iqamah: addMinutes(adhan, iqamahDelays[name] ?? 7) };
   });
 }
 
@@ -106,7 +119,7 @@ function applySimulation(schedule) {
 
   return schedule.map((prayer) =>
     prayer.name === simulationPrayer
-      ? { ...prayer, adhan: demoAdhan, iqamah: addMinutes(demoAdhan, 7) }
+      ? { ...prayer, adhan: demoAdhan, iqamah: addMinutes(demoAdhan, iqamahDelays[prayer.name] ?? 7) }
       : prayer,
   );
 }
@@ -135,7 +148,6 @@ function getDisplayPhase(date) {
   const currentSeconds = hour * 3600 + minute * 60 + second;
   const adhanNoticeDuration = 30;
   const shafNoticeDuration = 10;
-  const prayerModeDuration = 10 * 60;
 
   const dailyNotices = [
     { name: "Imsak", time: dailyTimes.imsak },
@@ -151,6 +163,7 @@ function getDisplayPhase(date) {
   }
 
   for (const prayer of prayerSchedule) {
+    const prayerModeDuration = (prayerDurations[prayer.name] ?? 10) * 60;
     const [adhanHour, adhanMinute] = prayer.adhan.split(":").map(Number);
     const [iqamahHour, iqamahMinute] = prayer.iqamah.split(":").map(Number);
     const adhanSeconds = adhanHour * 3600 + adhanMinute * 60;
@@ -234,7 +247,7 @@ async function loadDepokSchedule() {
         prayerSchedule = applySimulation(
           parsed.schedule.map((prayer) => ({
             ...prayer,
-            iqamah: addMinutes(prayer.adhan, 7),
+            iqamah: addMinutes(prayer.adhan, iqamahDelays[prayer.name] ?? 7),
           })),
         );
         if (parsed.dailyTimes) dailyTimes = parsed.dailyTimes;
@@ -512,6 +525,13 @@ async function loadRemoteContent() {
     const nextSignature = JSON.stringify(data);
     if (nextSignature === contentSignature) return;
     contentSignature = nextSignature;
+    iqamahDelays = normalizeTimingMap(data.iqamahDelays, DEFAULT_IQAMAH_DELAYS);
+    prayerDurations = normalizeTimingMap(data.prayerDurations, DEFAULT_PRAYER_DURATIONS);
+    prayerSchedule = prayerSchedule.map((prayer) => ({
+      ...prayer,
+      iqamah: addMinutes(prayer.adhan, iqamahDelays[prayer.name] ?? 7),
+    }));
+    updatePrayerCards();
     rebuildCarousel(data);
     const ticker = typeof data.ticker === "string" ? data.ticker.trim() : "";
     announcementBar.hidden = !ticker;
