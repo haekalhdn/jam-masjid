@@ -5,9 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.3";
+const APP_VERSION = "2026.08.08.4";
 
 type Prayer = { name: string; adhan: string; iqamah: string };
+type DailyTimes = { imsak: string; syuruk: string };
 type DisplayPhase =
   | { type: "normal" }
   | { type: "adhan"; prayer: Prayer }
@@ -21,6 +22,7 @@ const FALLBACK_SCHEDULE: Prayer[] = [
   { name: "Maghrib", adhan: "17:58", iqamah: "18:05" },
   { name: "Isya", adhan: "19:09", iqamah: "19:16" },
 ];
+const FALLBACK_DAILY_TIMES: DailyTimes = { imsak: "04:36", syuruk: "05:59" };
 
 const dateKeyFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: TIME_ZONE,
@@ -52,6 +54,13 @@ function scheduleFromApi(jadwal: Record<string, string>): Prayer[] {
     const adhan = normalizeTime(jadwal[key]);
     return { name, adhan, iqamah: addMinutes(adhan, delay) };
   });
+}
+
+function dailyTimesFromApi(jadwal: Record<string, string>): DailyTimes {
+  return {
+    imsak: normalizeTime(jadwal.imsak),
+    syuruk: normalizeTime(jadwal.terbit),
+  };
 }
 
 const timeFormatter = new Intl.DateTimeFormat("id-ID", {
@@ -165,6 +174,7 @@ export default function Home() {
   const [now, setNow] = useState<Date | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [prayerSchedule, setPrayerSchedule] = useState<Prayer[]>(FALLBACK_SCHEDULE);
+  const [dailyTimes, setDailyTimes] = useState<DailyTimes>(FALLBACK_DAILY_TIMES);
   const [activeSlide, setActiveSlide] = useState(0);
   const [availableVersion, setAvailableVersion] = useState<string | null>(null);
   const [isSimulation, setIsSimulation] = useState(false);
@@ -237,7 +247,11 @@ export default function Home() {
       try {
         const cached = window.localStorage.getItem(SCHEDULE_CACHE_KEY);
         if (cached) {
-          const parsed = JSON.parse(cached) as { date: string; schedule: Prayer[] };
+          const parsed = JSON.parse(cached) as {
+            date: string;
+            schedule: Prayer[];
+            dailyTimes?: DailyTimes;
+          };
           if (parsed.date === dateKey && !cancelled) {
             setPrayerSchedule(
               applySimulation(
@@ -247,6 +261,7 @@ export default function Home() {
               })),
               ),
             );
+            if (parsed.dailyTimes) setDailyTimes(parsed.dailyTimes);
           }
         }
 
@@ -255,12 +270,14 @@ export default function Home() {
 
         const data = (await response.json()) as { jadwal: Record<string, string> };
         const schedule = scheduleFromApi(data.jadwal);
+        const nextDailyTimes = dailyTimesFromApi(data.jadwal);
 
         if (!cancelled) {
           setPrayerSchedule(applySimulation(schedule));
+          setDailyTimes(nextDailyTimes);
           window.localStorage.setItem(
             SCHEDULE_CACHE_KEY,
-            JSON.stringify({ date: dateKey, schedule }),
+            JSON.stringify({ date: dateKey, schedule, dailyTimes: nextDailyTimes }),
           );
         }
       } catch {
@@ -400,6 +417,17 @@ export default function Home() {
             <p>{now ? dateFormatter.format(now) : "Memuat tanggal…"}</p>
             <span aria-hidden="true" />
             <p>{now ? hijriFormatter.format(now) : "Memuat tanggal Hijriah…"}</p>
+          </div>
+          <div className="daily-times" aria-label="Waktu Imsak dan Syuruk">
+            <div className="daily-time">
+              <span>Imsak</span>
+              <strong>{dailyTimes.imsak}</strong>
+            </div>
+            <i aria-hidden="true" />
+            <div className="daily-time">
+              <span>Syuruk</span>
+              <strong>{dailyTimes.syuruk}</strong>
+            </div>
           </div>
         </div>
 

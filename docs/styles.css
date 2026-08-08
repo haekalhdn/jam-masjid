@@ -356,6 +356,48 @@ button {
   background: var(--gold);
 }
 
+.daily-times,
+.daily-time {
+  display: flex;
+  align-items: center;
+}
+
+.daily-times {
+  width: max-content;
+  margin-top: clamp(12px, 1.8vh, 20px);
+  padding: clamp(8px, 1vh, 12px) clamp(13px, 1.1vw, 20px);
+  border: 1px solid rgba(241, 210, 141, 0.24);
+  border-radius: 14px;
+  background: rgba(6, 31, 25, 0.66);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.daily-time {
+  gap: 10px;
+}
+
+.daily-time span {
+  color: var(--muted);
+  font-size: clamp(9px, 0.62vw, 12px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.daily-time strong {
+  color: var(--gold-bright);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: clamp(18px, 1.35vw, 26px);
+  font-weight: 520;
+}
+
+.daily-times > i {
+  width: 1px;
+  height: 26px;
+  margin: 0 clamp(12px, 1vw, 18px);
+  background: var(--line);
+}
+
 .content-carousel {
   position: relative;
   overflow: hidden;

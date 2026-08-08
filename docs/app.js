@@ -1,7 +1,7 @@
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.3";
+const APP_VERSION = "2026.08.08.4";
 const pageParams = new URLSearchParams(window.location.search);
 const simulationPrayer = pageParams.get("demo") === "maghrib" ? "Maghrib" : null;
 const simulationRun = pageParams.get("run") || "default";
@@ -14,6 +14,7 @@ let prayerSchedule = [
   { name: "Maghrib", adhan: "17:58", iqamah: "18:05" },
   { name: "Isya", adhan: "19:09", iqamah: "19:16" },
 ];
+let dailyTimes = { imsak: "04:36", syuruk: "05:59" };
 let displayMode = "normal";
 let pendingVersion = null;
 
@@ -45,6 +46,13 @@ function scheduleFromApi(jadwal) {
     const adhan = normalizeTime(jadwal[key]);
     return { name, adhan, iqamah: addMinutes(adhan, delay) };
   });
+}
+
+function dailyTimesFromApi(jadwal) {
+  return {
+    imsak: normalizeTime(jadwal.imsak),
+    syuruk: normalizeTime(jadwal.terbit),
+  };
 }
 
 const clockFormatter = new Intl.DateTimeFormat("en-GB", {
@@ -187,6 +195,11 @@ function updatePrayerCards() {
   });
 }
 
+function updateDailyTimes() {
+  document.querySelector("#imsak-time").textContent = dailyTimes.imsak;
+  document.querySelector("#syuruk-time").textContent = dailyTimes.syuruk;
+}
+
 async function loadDepokSchedule() {
   const dateKey = dateKeyFormatter.format(new Date());
 
@@ -201,7 +214,9 @@ async function loadDepokSchedule() {
             iqamah: addMinutes(prayer.adhan, 7),
           })),
         );
+        if (parsed.dailyTimes) dailyTimes = parsed.dailyTimes;
         updatePrayerCards();
+        updateDailyTimes();
         updateDisplay();
       }
     }
@@ -210,12 +225,15 @@ async function loadDepokSchedule() {
     if (!response.ok) throw new Error("Jadwal Depok tidak tersedia");
     const data = await response.json();
 
-    prayerSchedule = applySimulation(scheduleFromApi(data.jadwal));
+    const schedule = scheduleFromApi(data.jadwal);
+    prayerSchedule = applySimulation(schedule);
+    dailyTimes = dailyTimesFromApi(data.jadwal);
     window.localStorage.setItem(
       SCHEDULE_CACHE_KEY,
-      JSON.stringify({ date: dateKey, schedule: prayerSchedule }),
+      JSON.stringify({ date: dateKey, schedule, dailyTimes }),
     );
     updatePrayerCards();
+    updateDailyTimes();
     updateDisplay();
   } catch {
     // Jadwal cache atau fallback tetap ditampilkan jika internet terputus.
@@ -361,6 +379,7 @@ scheduleNextSlide();
 
 prayerSchedule = applySimulation(prayerSchedule);
 updatePrayerCards();
+updateDailyTimes();
 updateDisplay();
 void loadDepokSchedule();
 void checkForUpdates();
