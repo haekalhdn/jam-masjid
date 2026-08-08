@@ -322,7 +322,7 @@ async function downloadTelegramFile(env: Env, fileId: string) {
   return { response, path: file.file_path };
 }
 
-async function savePoster(env: Env, message: TelegramMessage, userId: number) {
+async function savePoster(env: Env, message: TelegramMessage, userId: number, posterName: string) {
   const photo = message.photo?.at(-1);
   const document = message.document;
   const fileId = photo?.file_id || document?.file_id;
@@ -352,7 +352,7 @@ async function savePoster(env: Env, message: TelegramMessage, userId: number) {
     `INSERT INTO slides(kind, title, media_key, duration_seconds, sort_order)
      VALUES ('poster', ?1, ?2, 12, ?3)`,
   )
-    .bind(message.caption?.trim() || "Poster kegiatan masjid", key, Number(maxOrder?.value || 0) + 1)
+    .bind(posterName, key, Number(maxOrder?.value || 0) + 1)
     .run();
   await clearSession(env, userId);
   await sendMessage(env, message.chat.id, "✅ Poster sudah ditambahkan. Layar TV akan mengambil pembaruan otomatis.");
@@ -657,8 +657,8 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate) {
   }
 
   if (text === "🖼 Tambah poster" || text === "/poster") {
-    await setSession(env, user.id, "poster");
-    await sendMessage(env, message.chat.id, "Silakan kirim gambar poster. Caption foto akan dipakai sebagai judul.");
+    await setSession(env, user.id, "poster_name");
+    await sendMessage(env, message.chat.id, "Ketik nama poster untuk memudahkan pengelolaan di Telegram. Nama ini tidak akan ditampilkan di layar TV.");
     return;
   }
 
@@ -675,8 +675,16 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate) {
   }
 
   const session = await getSession(env, user.id);
-  if (session === "poster") {
-    await savePoster(env, message, user.id);
+  if (session === "poster_name") {
+    if (!message.text || text.length < 2 || text.length > 80) {
+      await sendMessage(env, message.chat.id, "Ketik nama poster sepanjang 2–80 karakter terlebih dahulu, contoh <code>Jadwal Ta'lim Agustus</code>.");
+      return;
+    }
+    await setSession(env, user.id, `poster_upload:${encodeURIComponent(text)}`);
+    await sendMessage(env, message.chat.id, `Nama poster: <b>${escapeHtml(text)}</b>\nSekarang kirim gambar posternya.`);
+  } else if (session?.startsWith("poster_upload:")) {
+    const posterName = decodeURIComponent(session.slice("poster_upload:".length));
+    await savePoster(env, message, user.id, posterName);
   } else if (session === "youtube" && text) {
     await saveYouTube(env, message, user.id, text);
   } else if (session === "ticker" && text) {
@@ -727,7 +735,7 @@ async function publicDisplay(env: Env, request: Request) {
       slides: slides.results.map((slide) => ({
         id: slide.id,
         kind: slide.kind,
-        title: slide.title,
+        title: slide.kind === "youtube" ? slide.title : null,
         imageUrl: slide.media_key ? `${url.origin}/media/${slide.media_key}` : null,
         youtubeId: slide.youtube_id,
         durationSeconds: slide.duration_seconds,
