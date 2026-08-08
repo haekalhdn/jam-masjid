@@ -402,7 +402,7 @@ async function savePoster(env: Env, message: TelegramMessage, userId: number, po
   ).first<{ value: number }>();
   await env.DB.prepare(
     `INSERT INTO slides(kind, title, media_key, duration_seconds, sort_order)
-     VALUES ('poster', ?1, ?2, 12, ?3)`,
+     VALUES ('poster', ?1, ?2, 5, ?3)`,
   )
     .bind(posterName, key, Number(maxOrder?.value || 0) + 1)
     .run();

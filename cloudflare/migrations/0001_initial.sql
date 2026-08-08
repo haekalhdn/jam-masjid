@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS slides (
   title TEXT,
   media_key TEXT,
   youtube_id TEXT,
-  duration_seconds INTEGER NOT NULL DEFAULT 12,
+  duration_seconds INTEGER NOT NULL DEFAULT 5,
   sort_order INTEGER NOT NULL DEFAULT 0,
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
