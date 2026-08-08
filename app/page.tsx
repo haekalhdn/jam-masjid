@@ -9,11 +9,11 @@ const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
 type Prayer = { name: string; adhan: string; iqamah: string };
 
 const FALLBACK_SCHEDULE: Prayer[] = [
-  { name: "Subuh", adhan: "04:46", iqamah: "04:56" },
-  { name: "Dzuhur", adhan: "12:03", iqamah: "12:13" },
-  { name: "Ashar", adhan: "15:23", iqamah: "15:33" },
+  { name: "Subuh", adhan: "04:46", iqamah: "04:53" },
+  { name: "Dzuhur", adhan: "12:03", iqamah: "12:10" },
+  { name: "Ashar", adhan: "15:23", iqamah: "15:30" },
   { name: "Maghrib", adhan: "17:58", iqamah: "18:05" },
-  { name: "Isya", adhan: "19:09", iqamah: "19:19" },
+  { name: "Isya", adhan: "19:09", iqamah: "19:16" },
 ];
 
 const dateKeyFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -35,11 +35,11 @@ function addMinutes(time: string, minutesToAdd: number) {
 
 function scheduleFromApi(jadwal: Record<string, string>): Prayer[] {
   const prayerData = [
-    { name: "Subuh", key: "subuh", delay: 10 },
-    { name: "Dzuhur", key: "dzuhur", delay: 10 },
-    { name: "Ashar", key: "ashar", delay: 10 },
+    { name: "Subuh", key: "subuh", delay: 7 },
+    { name: "Dzuhur", key: "dzuhur", delay: 7 },
+    { name: "Ashar", key: "ashar", delay: 7 },
     { name: "Maghrib", key: "maghrib", delay: 7 },
-    { name: "Isya", key: "isya", delay: 10 },
+    { name: "Isya", key: "isya", delay: 7 },
   ];
 
   return prayerData.map(({ name, key, delay }) => {
@@ -160,7 +160,14 @@ export default function Home() {
         const cached = window.localStorage.getItem(SCHEDULE_CACHE_KEY);
         if (cached) {
           const parsed = JSON.parse(cached) as { date: string; schedule: Prayer[] };
-          if (parsed.date === dateKey && !cancelled) setPrayerSchedule(parsed.schedule);
+          if (parsed.date === dateKey && !cancelled) {
+            setPrayerSchedule(
+              parsed.schedule.map((prayer) => ({
+                ...prayer,
+                iqamah: addMinutes(prayer.adhan, 7),
+              })),
+            );
+          }
         }
 
         const response = await fetch(`${SCHEDULE_API}?tanggal=${dateKey}`, { cache: "no-store" });
@@ -255,6 +262,13 @@ export default function Home() {
           </div>
         </div>
 
+        <div className="taalim-panel">
+          <img
+            src="/jadwal-talim-agustus-2026.png"
+            alt="Jadwal Ta’lim Masjid Al-Hidayah bulan Agustus 2026"
+          />
+        </div>
+
         <aside className="countdown-panel">
           <div className="ornament" aria-hidden="true">✦</div>
           <p className="countdown-kicker">MENUJU IQOMAH</p>
@@ -279,7 +293,7 @@ export default function Home() {
             <p className="eyebrow">JADWAL KOTA DEPOK</p>
             <h2 id="schedule-title">Waktu Sholat</h2>
           </div>
-          <p className="section-reminder">Metode Kemenag RI • Data MuslimKita.id</p>
+          <p className="section-reminder">Kemenag RI • Iqomah 7 menit setelah adzan</p>
         </div>
 
         <div className="prayer-grid">

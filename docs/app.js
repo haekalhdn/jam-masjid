@@ -3,11 +3,11 @@ const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
 
 let prayerSchedule = [
-  { name: "Subuh", adhan: "04:46", iqamah: "04:56" },
-  { name: "Dzuhur", adhan: "12:03", iqamah: "12:13" },
-  { name: "Ashar", adhan: "15:23", iqamah: "15:33" },
+  { name: "Subuh", adhan: "04:46", iqamah: "04:53" },
+  { name: "Dzuhur", adhan: "12:03", iqamah: "12:10" },
+  { name: "Ashar", adhan: "15:23", iqamah: "15:30" },
   { name: "Maghrib", adhan: "17:58", iqamah: "18:05" },
-  { name: "Isya", adhan: "19:09", iqamah: "19:19" },
+  { name: "Isya", adhan: "19:09", iqamah: "19:16" },
 ];
 
 const dateKeyFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -29,11 +29,11 @@ function addMinutes(time, minutesToAdd) {
 
 function scheduleFromApi(jadwal) {
   return [
-    { name: "Subuh", key: "subuh", delay: 10 },
-    { name: "Dzuhur", key: "dzuhur", delay: 10 },
-    { name: "Ashar", key: "ashar", delay: 10 },
+    { name: "Subuh", key: "subuh", delay: 7 },
+    { name: "Dzuhur", key: "dzuhur", delay: 7 },
+    { name: "Ashar", key: "ashar", delay: 7 },
     { name: "Maghrib", key: "maghrib", delay: 7 },
-    { name: "Isya", key: "isya", delay: 10 },
+    { name: "Isya", key: "isya", delay: 7 },
   ].map(({ name, key, delay }) => {
     const adhan = normalizeTime(jadwal[key]);
     return { name, adhan, iqamah: addMinutes(adhan, delay) };
@@ -119,7 +119,10 @@ async function loadDepokSchedule() {
     if (cached) {
       const parsed = JSON.parse(cached);
       if (parsed.date === dateKey) {
-        prayerSchedule = parsed.schedule;
+        prayerSchedule = parsed.schedule.map((prayer) => ({
+          ...prayer,
+          iqamah: addMinutes(prayer.adhan, 7),
+        }));
         updatePrayerCards();
         updateDisplay();
       }
