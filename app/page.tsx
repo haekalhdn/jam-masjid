@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.4";
+const APP_VERSION = "2026.08.08.5";
 
 type Prayer = { name: string; adhan: string; iqamah: string };
 type DailyTimes = { imsak: string; syuruk: string };
@@ -13,6 +13,7 @@ type DisplayPhase =
   | { type: "normal" }
   | { type: "adhan"; prayer: Prayer }
   | { type: "countdown"; prayer: Prayer; secondsRemaining: number }
+  | { type: "shaf"; prayer: Prayer }
   | { type: "prayer"; prayer: Prayer };
 
 const FALLBACK_SCHEDULE: Prayer[] = [
@@ -140,6 +141,7 @@ function getDisplayPhase(date: Date, prayerSchedule: Prayer[]): DisplayPhase {
   const { hours, minutes, seconds } = getTimeParts(date);
   const currentSeconds = hours * 3600 + minutes * 60 + seconds;
   const adhanNoticeDuration = 30;
+  const shafNoticeDuration = 10;
   const prayerModeDuration = 10 * 60;
 
   for (const prayer of prayerSchedule) {
@@ -156,7 +158,14 @@ function getDisplayPhase(date: Date, prayerSchedule: Prayer[]): DisplayPhase {
       return { type: "countdown", prayer, secondsRemaining: iqamahSeconds - currentSeconds };
     }
 
-    if (currentSeconds >= iqamahSeconds && currentSeconds < iqamahSeconds + prayerModeDuration) {
+    if (currentSeconds >= iqamahSeconds && currentSeconds < iqamahSeconds + shafNoticeDuration) {
+      return { type: "shaf", prayer };
+    }
+
+    if (
+      currentSeconds >= iqamahSeconds + shafNoticeDuration &&
+      currentSeconds < iqamahSeconds + prayerModeDuration
+    ) {
       return { type: "prayer", prayer };
     }
   }
@@ -335,6 +344,7 @@ export default function Home() {
     normal: "",
     adhan: " adhan-mode",
     countdown: " iqamah-countdown-mode",
+    shaf: " shaf-mode",
     prayer: " prayer-mode",
   }[displayPhase.type];
 
@@ -351,7 +361,9 @@ export default function Home() {
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
 
-      {(displayPhase.type === "adhan" || displayPhase.type === "countdown") && (
+      {(displayPhase.type === "adhan" ||
+        displayPhase.type === "countdown" ||
+        displayPhase.type === "shaf") && (
         <section className={"transition-screen " + displayPhase.type} aria-live="polite" aria-atomic="true">
           <p className="transition-kicker">
             {displayPhase.type === "adhan" ? "WAKTU SHOLAT" : "IQOMAH"}
@@ -359,18 +371,18 @@ export default function Home() {
           <h2>
             {displayPhase.type === "adhan"
               ? "Sudah Masuk Waktu " + displayPhase.prayer.name
-              : "Iqomah " + displayPhase.prayer.name}
+              : displayPhase.type === "countdown"
+                ? "Iqomah " + displayPhase.prayer.name
+                : "Luruskan dan Rapatkan Shaf"}
           </h2>
           {displayPhase.type === "countdown" && (
             <strong className="transition-countdown">
               {formatCountdown(displayPhase.secondsRemaining)}
             </strong>
           )}
-          <p className="transition-message">
-            {displayPhase.type === "adhan"
-              ? "Mari bersiap menunaikan sholat berjamaah."
-              : "Luruskan dan rapatkan shaf."}
-          </p>
+          {displayPhase.type === "adhan" && (
+            <p className="transition-message">Mari bersiap menunaikan sholat berjamaah.</p>
+          )}
         </section>
       )}
 

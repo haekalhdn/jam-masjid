@@ -1,7 +1,7 @@
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.4";
+const APP_VERSION = "2026.08.08.5";
 const pageParams = new URLSearchParams(window.location.search);
 const simulationPrayer = pageParams.get("demo") === "maghrib" ? "Maghrib" : null;
 const simulationRun = pageParams.get("run") || "default";
@@ -132,6 +132,7 @@ function getDisplayPhase(date) {
   const { hour, minute, second } = getTimeParts(date);
   const currentSeconds = hour * 3600 + minute * 60 + second;
   const adhanNoticeDuration = 30;
+  const shafNoticeDuration = 10;
   const prayerModeDuration = 10 * 60;
 
   for (const prayer of prayerSchedule) {
@@ -148,7 +149,14 @@ function getDisplayPhase(date) {
       return { type: "countdown", prayer, secondsRemaining: iqamahSeconds - currentSeconds };
     }
 
-    if (currentSeconds >= iqamahSeconds && currentSeconds < iqamahSeconds + prayerModeDuration) {
+    if (currentSeconds >= iqamahSeconds && currentSeconds < iqamahSeconds + shafNoticeDuration) {
+      return { type: "shaf", prayer };
+    }
+
+    if (
+      currentSeconds >= iqamahSeconds + shafNoticeDuration &&
+      currentSeconds < iqamahSeconds + prayerModeDuration
+    ) {
       return { type: "prayer", prayer };
     }
   }
@@ -261,26 +269,32 @@ function updateDisplay() {
 
   if (phase.type !== displayMode) {
     displayMode = phase.type;
-    displayShell.classList.remove("adhan-mode", "iqamah-countdown-mode", "prayer-mode");
+    displayShell.classList.remove("adhan-mode", "iqamah-countdown-mode", "shaf-mode", "prayer-mode");
     if (displayMode === "adhan") displayShell.classList.add("adhan-mode");
     if (displayMode === "countdown") displayShell.classList.add("iqamah-countdown-mode");
+    if (displayMode === "shaf") displayShell.classList.add("shaf-mode");
     if (displayMode === "prayer") displayShell.classList.add("prayer-mode");
     updateVideoPlayer(displayMode === "normal" && activeSlide === 2);
     scheduleNextSlide();
   }
 
-  const showTransition = phase.type === "adhan" || phase.type === "countdown";
+  const showTransition =
+    phase.type === "adhan" || phase.type === "countdown" || phase.type === "shaf";
   transitionScreen.setAttribute("aria-hidden", String(!showTransition));
 
   if (showTransition) {
     const isAdhan = phase.type === "adhan";
+    const isCountdown = phase.type === "countdown";
     transitionKicker.textContent = isAdhan ? "WAKTU SHOLAT" : "IQOMAH";
-    transitionTitle.textContent = (isAdhan ? "Sudah Masuk Waktu " : "Iqomah ") + phase.prayer.name;
-    transitionCountdown.hidden = isAdhan;
-    if (!isAdhan) transitionCountdown.textContent = formatCountdown(phase.secondsRemaining);
-    transitionMessage.textContent = isAdhan
-      ? "Mari bersiap menunaikan sholat berjamaah."
-      : "Luruskan dan rapatkan shaf.";
+    transitionTitle.textContent = isAdhan
+      ? "Sudah Masuk Waktu " + phase.prayer.name
+      : isCountdown
+        ? "Iqomah " + phase.prayer.name
+        : "Luruskan dan Rapatkan Shaf";
+    transitionCountdown.hidden = !isCountdown;
+    if (isCountdown) transitionCountdown.textContent = formatCountdown(phase.secondsRemaining);
+    transitionMessage.hidden = !isAdhan;
+    if (isAdhan) transitionMessage.textContent = "Mari bersiap menunaikan sholat berjamaah.";
   }
 
   document.querySelector("#clock-hour").textContent = String(hour).padStart(2, "0");
