@@ -68,10 +68,10 @@ const jsonHeaders = {
 
 const menuKeyboard = {
   keyboard: [
-    [{ text: "🖼 Tambah poster" }, { text: "▶️ Ganti YouTube" }],
+    [{ text: "🖼 Tambah poster" }, { text: "🗑 Hapus poster" }],
+    [{ text: "▶️ Ganti YouTube" }, { text: "🕋 Mode Jumat" }],
     [{ text: "📢 Ubah info TV" }, { text: "🧹 Sembunyikan info" }],
     [{ text: "⏱ Atur iqomah" }, { text: "🕌 Durasi sholat" }],
-    [{ text: "🕋 Mode Jumat" }],
     [{ text: "📋 Lihat konten" }, { text: "❌ Batal" }],
   ],
   resize_keyboard: true,
@@ -540,6 +540,51 @@ async function deleteSlide(env: Env, message: TelegramMessage, idText: string) {
   await sendMessage(env, message.chat.id, "✅ Slide sudah dihapus dari layar.");
 }
 
+async function promptDeletePoster(env: Env, chatId: number, userId: number) {
+  const posters = await env.DB.prepare(
+    "SELECT id, title FROM slides WHERE active = 1 AND kind = 'poster' ORDER BY sort_order, id",
+  ).all<{ id: number; title: string | null }>();
+
+  if (!posters.results.length) {
+    await clearSession(env, userId);
+    await sendMessage(env, chatId, "Belum ada poster aktif yang bisa dihapus.");
+    return;
+  }
+
+  const list = posters.results
+    .map((poster) => `<code>${poster.id}</code> • ${escapeHtml(poster.title || "Poster kegiatan masjid")}`)
+    .join("\n");
+  await setSession(env, userId, "delete_poster");
+  await sendMessage(env, chatId, `<b>Pilih poster yang akan dihapus</b>\n${list}\n\nKirim nomor ID posternya, contoh <code>1</code>.`);
+}
+
+async function deletePoster(env: Env, message: TelegramMessage, userId: number, idText: string) {
+  const id = Number(idText.trim());
+  if (!Number.isInteger(id) || id <= 0) {
+    await sendMessage(env, message.chat.id, "Kirim nomor ID poster saja, contoh <code>1</code>.");
+    return;
+  }
+
+  const poster = await env.DB.prepare(
+    "SELECT media_key FROM slides WHERE id = ?1 AND active = 1 AND kind = 'poster'",
+  )
+    .bind(id)
+    .first<{ media_key: string | null }>();
+  if (!poster) {
+    await sendMessage(env, message.chat.id, "Poster dengan ID tersebut tidak ditemukan. Coba pilih lagi dari menu <b>Hapus poster</b>.");
+    return;
+  }
+
+  await env.DB.prepare(
+    "UPDATE slides SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?1 AND kind = 'poster'",
+  )
+    .bind(id)
+    .run();
+  if (poster.media_key) await env.MEDIA.delete(poster.media_key);
+  await clearSession(env, userId);
+  await sendMessage(env, message.chat.id, "✅ Poster sudah dihapus. Layar TV akan memperbarui otomatis.");
+}
+
 async function handleTelegramUpdate(env: Env, update: TelegramUpdate) {
   const message = update.message;
   const user = message?.from;
@@ -601,6 +646,11 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate) {
     return;
   }
 
+  if (text === "🗑 Hapus poster" || text === "/hapusposter") {
+    await promptDeletePoster(env, message.chat.id, user.id);
+    return;
+  }
+
   if (text.startsWith("/hapus ")) {
     await deleteSlide(env, message, text.slice(7).trim());
     return;
@@ -637,6 +687,8 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate) {
     await saveTimingSetting(env, message, user.id, text, "prayer_duration");
   } else if (session === "friday" && text) {
     await saveFridaySettings(env, message, user.id, text);
+  } else if (session === "delete_poster" && text) {
+    await deletePoster(env, message, user.id, text);
   } else {
     await sendMessage(env, message.chat.id, "Pilih salah satu menu di bawah ya.");
   }
