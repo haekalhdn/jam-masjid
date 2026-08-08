@@ -91,16 +91,6 @@ function getNextIqamah(date) {
   };
 }
 
-function formatCountdown(totalSeconds) {
-  return [
-    Math.floor(totalSeconds / 3600),
-    Math.floor((totalSeconds % 3600) / 60),
-    totalSeconds % 60,
-  ]
-    .map((value) => String(value).padStart(2, "0"))
-    .join(":");
-}
-
 function updatePrayerCards() {
   document.querySelectorAll(".prayer-card").forEach((card) => {
     const prayer = prayerSchedule.find((item) => item.name === card.dataset.prayer);
@@ -155,11 +145,6 @@ function updateDisplay() {
   document.querySelector("#clock").setAttribute("aria-label", clockFormatter.format(now));
   document.querySelector("#current-date").textContent = dateFormatter.format(now);
   document.querySelector("#hijri-date").textContent = hijriFormatter.format(now);
-  document.querySelector("#next-prayer").textContent = next.prayer.name;
-  document.querySelector("#countdown").textContent = formatCountdown(next.secondsRemaining);
-  document.querySelector("#next-adhan").textContent = next.prayer.adhan;
-  document.querySelector("#next-iqamah").textContent = next.prayer.iqamah;
-
   document.querySelectorAll(".prayer-card").forEach((card) => {
     card.classList.toggle("active", card.dataset.prayer === next.prayer.name);
   });
@@ -179,6 +164,33 @@ document.addEventListener("fullscreenchange", () => {
   fullscreenButton.querySelector(".fullscreen-icon").textContent = active ? "↙" : "↗";
   fullscreenButton.querySelector(".fullscreen-text").textContent = active ? "Keluar" : "Layar penuh";
 });
+
+const carouselSlides = [...document.querySelectorAll(".carousel-slide")];
+const carouselDots = [...document.querySelectorAll(".carousel-dot")];
+let activeSlide = 0;
+
+function showSlide(index) {
+  activeSlide = index;
+  carouselSlides.forEach((slide, slideIndex) => {
+    const active = slideIndex === activeSlide;
+    slide.classList.toggle("active", active);
+    slide.setAttribute("aria-hidden", String(!active));
+  });
+  carouselDots.forEach((dot, dotIndex) => {
+    const active = dotIndex === activeSlide;
+    dot.classList.toggle("active", active);
+    if (active) dot.setAttribute("aria-current", "true");
+    else dot.removeAttribute("aria-current");
+  });
+}
+
+carouselDots.forEach((dot) => {
+  dot.addEventListener("click", () => showSlide(Number(dot.dataset.slide)));
+});
+
+if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  window.setInterval(() => showSlide((activeSlide + 1) % carouselSlides.length), 12000);
+}
 
 updatePrayerCards();
 updateDisplay();

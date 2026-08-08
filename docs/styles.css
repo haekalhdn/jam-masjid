@@ -197,8 +197,8 @@ button {
 
 .hero-grid {
   display: grid;
-  grid-template-columns: minmax(280px, 0.75fr) minmax(440px, 1.25fr) minmax(320px, 0.8fr);
-  gap: clamp(18px, 1.8vw, 34px);
+  grid-template-columns: minmax(320px, 0.62fr) minmax(600px, 1.38fr);
+  gap: clamp(28px, 3vw, 56px);
   align-items: center;
   min-height: clamp(360px, 41vh, 535px);
   padding: clamp(30px, 3vw, 56px) 0;
@@ -228,7 +228,7 @@ button {
   align-items: baseline;
   margin: clamp(8px, 1vh, 16px) 0 12px;
   font-family: "Courier New", ui-monospace, monospace;
-  font-size: clamp(76px, 7.2vw, 138px);
+  font-size: clamp(86px, 9vw, 172px);
   font-weight: 240;
   letter-spacing: -0.085em;
   line-height: 0.9;
@@ -272,20 +272,116 @@ button {
   background: var(--gold);
 }
 
-.taalim-panel {
+.content-carousel {
+  position: relative;
   overflow: hidden;
-  align-self: center;
-  margin: 0;
+  min-width: 0;
+  aspect-ratio: 862 / 470;
   border: 2px solid rgba(241, 210, 141, 0.62);
   border-radius: 22px;
-  background: #ffffff;
+  background: rgba(5, 28, 23, 0.9);
   box-shadow: 0 26px 70px rgba(0, 0, 0, 0.34), 0 0 0 6px rgba(214, 181, 109, 0.06);
 }
 
-.taalim-panel img {
+.carousel-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 700ms ease, visibility 700ms ease;
+}
+
+.carousel-slide.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.poster-slide {
+  background: #ffffff;
+}
+
+.poster-slide img {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: contain;
+}
+
+.agenda-slide {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(28px, 2.8vw, 52px);
+  background:
+    radial-gradient(circle at 90% 10%, rgba(214, 181, 109, 0.2), transparent 26%),
+    linear-gradient(145deg, rgba(23, 79, 65, 0.97), rgba(5, 29, 24, 0.97));
+}
+
+.agenda-slide h2 {
+  max-width: 760px;
+  margin: 7px 0 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(30px, 2.7vw, 52px);
+  font-weight: 500;
+  line-height: 1.05;
+}
+
+.agenda-list {
+  display: grid;
+  gap: 9px;
+}
+
+.agenda-item {
+  display: grid;
+  grid-template-columns: minmax(72px, 0.3fr) minmax(180px, 1fr) minmax(170px, 0.8fr);
+  gap: 18px;
+  align-items: center;
+  padding: clamp(10px, 1.1vh, 16px) 0;
+  border-top: 1px solid rgba(241, 210, 141, 0.2);
+}
+
+.agenda-item strong {
+  color: var(--gold-bright);
+  font-size: clamp(14px, 1.05vw, 20px);
+}
+
+.agenda-item span {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(16px, 1.25vw, 24px);
+}
+
+.agenda-item small {
+  color: #bdc9c2;
+  font-size: clamp(11px, 0.78vw, 15px);
+  text-align: right;
+}
+
+.carousel-dots {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  z-index: 3;
+  display: flex;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: rgba(2, 18, 14, 0.72);
+}
+
+.carousel-dot {
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.42);
+  cursor: pointer;
+}
+
+.carousel-dot.active {
+  width: 24px;
+  border-radius: 999px;
+  background: var(--gold-bright);
 }
 
 .countdown-panel {
@@ -515,20 +611,7 @@ button {
 
 @media (max-width: 1050px) {
   .hero-grid {
-    grid-template-columns: 1fr minmax(300px, 0.8fr);
-  }
-
-  .clock-panel {
-    grid-column: 1;
-  }
-
-  .countdown-panel {
-    grid-column: 2;
-  }
-
-  .taalim-panel {
-    grid-column: 1 / -1;
-    grid-row: 2;
+    grid-template-columns: 1fr;
   }
 
   .live-status {
@@ -580,8 +663,7 @@ button {
   }
 
   .clock-panel,
-  .countdown-panel,
-  .taalim-panel {
+  .content-carousel {
     grid-column: auto;
     grid-row: auto;
   }
@@ -594,8 +676,18 @@ button {
     font-size: clamp(72px, 26vw, 140px);
   }
 
-  .countdown-panel {
-    border-radius: 22px 22px 55px 22px;
+  .content-carousel {
+    min-height: 340px;
+    aspect-ratio: auto;
+  }
+
+  .agenda-item {
+    grid-template-columns: 70px 1fr;
+  }
+
+  .agenda-item small {
+    grid-column: 2;
+    text-align: left;
   }
 
   .announcement-bar {
@@ -608,6 +700,10 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .carousel-slide {
+    transition: none;
+  }
+
   .ticker-window p {
     width: auto;
     padding-left: 24px;

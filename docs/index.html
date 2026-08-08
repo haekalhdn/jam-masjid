@@ -9,8 +9,8 @@
       name="description"
       content="Layar informasi waktu sholat dan hitung mundur iqomah Masjid Jami’ Al-Hidayah."
     />
-    <link rel="stylesheet" href="./styles.css?v=5" />
-    <script src="./app.js?v=5" defer></script>
+    <link rel="stylesheet" href="./styles.css?v=6" />
+    <script src="./app.js?v=6" defer></script>
   </head>
   <body>
     <main class="display-shell">
@@ -56,24 +56,31 @@
           </div>
         </div>
 
-        <div class="taalim-panel">
-          <img
-            src="./jadwal-talim-agustus-2026.png"
-            alt="Jadwal Ta’lim Masjid Al-Hidayah bulan Agustus 2026"
-          />
-        </div>
+        <div class="content-carousel" aria-label="Informasi kegiatan masjid" aria-roledescription="carousel">
+          <div class="carousel-slide poster-slide active" aria-hidden="false">
+            <img
+              src="./jadwal-talim-agustus-2026.png"
+              alt="Jadwal Ta’lim Masjid Al-Hidayah bulan Agustus 2026"
+            />
+          </div>
 
-        <aside class="countdown-panel">
-          <div class="ornament" aria-hidden="true">✦</div>
-          <p class="countdown-kicker">MENUJU IQOMAH</p>
-          <h2 id="next-prayer">—</h2>
-          <div class="countdown-time" id="countdown">--:--:--</div>
-          <div class="countdown-labels"><span>Jam</span><span>Menit</span><span>Detik</span></div>
-          <p class="iqamah-note">
-            Adzan <span id="next-adhan">--:--</span> <span>•</span>
-            Iqomah <span id="next-iqamah">--:--</span>
-          </p>
-        </aside>
+          <div class="carousel-slide agenda-slide" aria-hidden="true">
+            <div>
+              <p class="eyebrow">AGENDA TA’LIM AGUSTUS</p>
+              <h2>Majelis ilmu untuk jamaah dan keluarga</h2>
+            </div>
+            <div class="agenda-list">
+              <div class="agenda-item"><strong>09 Agu</strong><span>Ta’lim Subuh Ahad</span><small>Dr. KH. Kamaludin, MA.</small></div>
+              <div class="agenda-item"><strong>15 Agu</strong><span>Tahsinul Qur’an</span><small>Ust. Iip Ikhwanurrahman</small></div>
+              <div class="agenda-item"><strong>17 Agu</strong><span>Ta’lim malam ba’da Magrib</span><small>Ust. Rahmat Hidayat</small></div>
+            </div>
+          </div>
+
+          <div class="carousel-dots" aria-label="Pilih slide">
+            <button class="carousel-dot active" type="button" data-slide="0" aria-current="true" aria-label="Tampilkan slide 1"></button>
+            <button class="carousel-dot" type="button" data-slide="1" aria-label="Tampilkan slide 2"></button>
+          </div>
+        </div>
       </section>
 
       <section class="schedule-section" aria-labelledby="schedule-title">

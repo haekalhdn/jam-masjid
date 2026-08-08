@@ -121,20 +121,11 @@ function getNextIqamah(date: Date, prayerSchedule: Prayer[]) {
   };
 }
 
-function formatCountdown(totalSeconds: number) {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  return [hours, minutes, seconds]
-    .map((value) => String(value).padStart(2, "0"))
-    .join(":");
-}
-
 export default function Home() {
   const [now, setNow] = useState<Date | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [prayerSchedule, setPrayerSchedule] = useState<Prayer[]>(FALLBACK_SCHEDULE);
+  const [activeSlide, setActiveSlide] = useState(0);
 
   useEffect(() => {
     const updateClock = () => setNow(new Date());
@@ -148,6 +139,15 @@ export default function Home() {
       window.clearInterval(timer);
       document.removeEventListener("fullscreenchange", handleFullscreen);
     };
+  }, []);
+
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const slideTimer = window.setInterval(
+      () => setActiveSlide((current) => (current + 1) % 2),
+      12000,
+    );
+    return () => window.clearInterval(slideTimer);
   }, []);
 
   useEffect(() => {
@@ -262,29 +262,39 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="taalim-panel">
-          <img
-            src="/jadwal-talim-agustus-2026.png"
-            alt="Jadwal Ta’lim Masjid Al-Hidayah bulan Agustus 2026"
-          />
-        </div>
+        <div className="content-carousel" aria-label="Informasi kegiatan masjid" aria-roledescription="carousel">
+          <div className={`carousel-slide poster-slide${activeSlide === 0 ? " active" : ""}`} aria-hidden={activeSlide !== 0}>
+            <img
+              src="/jadwal-talim-agustus-2026.png"
+              alt="Jadwal Ta’lim Masjid Al-Hidayah bulan Agustus 2026"
+            />
+          </div>
 
-        <aside className="countdown-panel">
-          <div className="ornament" aria-hidden="true">✦</div>
-          <p className="countdown-kicker">MENUJU IQOMAH</p>
-          <h2>{nextIqamah?.prayer.name ?? "—"}</h2>
-          <div className="countdown-time">
-            {nextIqamah ? formatCountdown(nextIqamah.secondsRemaining) : "--:--:--"}
+          <div className={`carousel-slide agenda-slide${activeSlide === 1 ? " active" : ""}`} aria-hidden={activeSlide !== 1}>
+            <div>
+              <p className="eyebrow">AGENDA TA’LIM AGUSTUS</p>
+              <h2>Majelis ilmu untuk jamaah dan keluarga</h2>
+            </div>
+            <div className="agenda-list">
+              <div className="agenda-item"><strong>09 Agu</strong><span>Ta’lim Subuh Ahad</span><small>Dr. KH. Kamaludin, MA.</small></div>
+              <div className="agenda-item"><strong>15 Agu</strong><span>Tahsinul Qur’an</span><small>Ust. Iip Ikhwanurrahman</small></div>
+              <div className="agenda-item"><strong>17 Agu</strong><span>Ta’lim malam ba’da Magrib</span><small>Ust. Rahmat Hidayat</small></div>
+            </div>
           </div>
-          <div className="countdown-labels">
-            <span>Jam</span>
-            <span>Menit</span>
-            <span>Detik</span>
+
+          <div className="carousel-dots" aria-label="Pilih slide">
+            {[0, 1].map((slide) => (
+              <button
+                className={`carousel-dot${activeSlide === slide ? " active" : ""}`}
+                key={slide}
+                onClick={() => setActiveSlide(slide)}
+                type="button"
+                aria-current={activeSlide === slide ? "true" : undefined}
+                aria-label={`Tampilkan slide ${slide + 1}`}
+              />
+            ))}
           </div>
-          <p className="iqamah-note">
-            Adzan {nextIqamah?.prayer.adhan ?? "--:--"} <span>•</span> Iqomah {nextIqamah?.prayer.iqamah ?? "--:--"}
-          </p>
-        </aside>
+        </div>
       </section>
 
       <section className="schedule-section" aria-labelledby="schedule-title">
