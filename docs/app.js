@@ -1,7 +1,7 @@
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.10";
+const APP_VERSION = "2026.08.08.11";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
 const CONTENT_REFRESH_MS = 30 * 1000;
 const pageParams = new URLSearchParams(window.location.search);
@@ -403,38 +403,105 @@ let contentSignature = "";
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 let activeSlide = 0;
 let slideTimer;
+let youtubeApiPromise;
+const youtubePlayers = new Map();
+
+function loadYouTubeApi() {
+  if (window.YT?.Player) return Promise.resolve(window.YT);
+  if (youtubeApiPromise) return youtubeApiPromise;
+
+  youtubeApiPromise = new Promise((resolve) => {
+    const previousReady = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      previousReady?.();
+      resolve(window.YT);
+    };
+    const script = document.createElement("script");
+    script.src = "https://www.youtube.com/iframe_api";
+    script.async = true;
+    document.head.append(script);
+  });
+  return youtubeApiPromise;
+}
+
+function destroyYouTubePlayer(container) {
+  const player = youtubePlayers.get(container);
+  if (player) {
+    try {
+      player.destroy();
+    } catch {
+      // Pemutar mungkin sudah dilepas oleh browser.
+    }
+    youtubePlayers.delete(container);
+  }
+  container.replaceChildren();
+}
 
 function updateActiveVideoPlayer() {
   document.querySelectorAll(".video-player").forEach((videoPlayer) => {
     const slide = videoPlayer.closest(".carousel-slide");
     const shouldPlay = displayMode === "normal" && carouselSlides[activeSlide] === slide;
-    const existingPlayer = videoPlayer.querySelector("iframe");
 
     if (!shouldPlay) {
-      existingPlayer?.remove();
+      destroyYouTubePlayer(videoPlayer);
       return;
     }
 
-    if (existingPlayer) return;
+    if (youtubePlayers.has(videoPlayer) || videoPlayer.dataset.loading === "true") return;
     const videoId = videoPlayer.dataset.youtubeId;
     if (!videoId) return;
-    const iframe = document.createElement("iframe");
-    iframe.src =
-      "https://www.youtube-nocookie.com/embed/" +
-      videoId +
-      "?autoplay=1&mute=1&loop=1&playlist=" +
-      videoId +
-      "&playsinline=1&rel=0";
-    iframe.title = videoPlayer.dataset.title || "Video Masjid Al-Hidayah";
-    iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
-    iframe.allowFullscreen = true;
-    videoPlayer.append(iframe);
+    videoPlayer.dataset.loading = "true";
+
+    void loadYouTubeApi().then((YT) => {
+      delete videoPlayer.dataset.loading;
+      const currentSlide = videoPlayer.closest(".carousel-slide");
+      if (displayMode !== "normal" || carouselSlides[activeSlide] !== currentSlide) return;
+
+      const mount = document.createElement("div");
+      videoPlayer.append(mount);
+      const player = new YT.Player(mount, {
+        videoId,
+        playerVars: {
+          autoplay: 1,
+          controls: 1,
+          mute: 1,
+          playsinline: 1,
+          rel: 0,
+          origin: window.location.origin,
+        },
+        events: {
+          onReady(event) {
+            event.target.mute();
+            event.target.playVideo();
+          },
+          onStateChange(event) {
+            if (event.data !== YT.PlayerState.ENDED) return;
+            if (carouselSlides[activeSlide] !== currentSlide) return;
+            if (carouselSlides.length === 1) {
+              event.target.seekTo(0, true);
+              event.target.playVideo();
+              return;
+            }
+            showSlide((activeSlide + 1) % carouselSlides.length);
+          },
+          onError() {
+            window.setTimeout(() => {
+              if (carouselSlides[activeSlide] === currentSlide) {
+                showSlide((activeSlide + 1) % carouselSlides.length);
+              }
+            }, 3000);
+          },
+        },
+      });
+      youtubePlayers.set(videoPlayer, player);
+    });
   });
 }
 
 function scheduleNextSlide() {
   window.clearTimeout(slideTimer);
   if (reducedMotion || displayMode !== "normal" || !carouselSlides.length) return;
+  if (carouselSlides[activeSlide]?.classList.contains("video-slide")) return;
   slideTimer = window.setTimeout(
     () => showSlide((activeSlide + 1) % carouselSlides.length),
     slideDurations[activeSlide] ?? 12000,

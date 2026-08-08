@@ -6,7 +6,7 @@ const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
-const APP_VERSION = "2026.08.08.10";
+const APP_VERSION = "2026.08.08.11";
 
 type PrayerName = "Subuh" | "Dzuhur" | "Ashar" | "Maghrib" | "Isya";
 type TimingMap = Record<PrayerName, number>;
@@ -24,6 +24,136 @@ type ContentSlide = {
 };
 type FridaySlide = FridaySettings & { id: "friday"; kind: "friday"; durationSeconds: number };
 type DisplaySlide = ContentSlide | FridaySlide;
+type YouTubePlayerInstance = {
+  destroy: () => void;
+  mute: () => void;
+  playVideo: () => void;
+  seekTo: (seconds: number, allowSeekAhead: boolean) => void;
+};
+type YouTubeNamespace = {
+  Player: new (
+    element: HTMLElement,
+    options: {
+      videoId: string;
+      host?: string;
+      playerVars: Record<string, string | number>;
+      events: {
+        onReady: (event: { target: YouTubePlayerInstance }) => void;
+        onStateChange: (event: { data: number; target: YouTubePlayerInstance }) => void;
+        onError: () => void;
+      };
+    },
+  ) => YouTubePlayerInstance;
+  PlayerState: { ENDED: number };
+};
+
+declare global {
+  interface Window {
+    YT?: YouTubeNamespace;
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+
+let youtubeApiPromise: Promise<YouTubeNamespace> | null = null;
+
+function loadYouTubeApi() {
+  if (window.YT?.Player) return Promise.resolve(window.YT);
+  if (youtubeApiPromise) return youtubeApiPromise;
+
+  youtubeApiPromise = new Promise((resolve) => {
+    const previousReady = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      previousReady?.();
+      resolve(window.YT as YouTubeNamespace);
+    };
+    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+      const script = document.createElement("script");
+      script.src = "https://www.youtube.com/iframe_api";
+      script.async = true;
+      document.head.append(script);
+    }
+  });
+
+  return youtubeApiPromise;
+}
+
+function YouTubeVideo({
+  videoId,
+  title,
+  active,
+  restartOnEnd,
+  onEnded,
+}: {
+  videoId: string;
+  title: string;
+  active: boolean;
+  restartOnEnd: boolean;
+  onEnded: () => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const onEndedRef = useRef(onEnded);
+
+  useEffect(() => {
+    onEndedRef.current = onEnded;
+  }, [onEnded]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !active) return;
+    let cancelled = false;
+    let player: YouTubePlayerInstance | null = null;
+    let errorTimer: number | null = null;
+
+    void loadYouTubeApi().then((YT) => {
+      if (cancelled) return;
+      const mount = document.createElement("div");
+      container.append(mount);
+      player = new YT.Player(mount, {
+        videoId,
+        host: "https://www.youtube-nocookie.com",
+        playerVars: {
+          autoplay: 1,
+          controls: 1,
+          mute: 1,
+          playsinline: 1,
+          rel: 0,
+          origin: window.location.origin,
+        },
+        events: {
+          onReady(event) {
+            event.target.mute();
+            event.target.playVideo();
+          },
+          onStateChange(event) {
+            if (event.data !== YT.PlayerState.ENDED) return;
+            if (restartOnEnd) {
+              event.target.seekTo(0, true);
+              event.target.playVideo();
+              return;
+            }
+            onEndedRef.current();
+          },
+          onError() {
+            errorTimer = window.setTimeout(() => onEndedRef.current(), 3000);
+          },
+        },
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      if (errorTimer !== null) window.clearTimeout(errorTimer);
+      try {
+        player?.destroy();
+      } catch {
+        // Pemutar mungkin sudah dilepas oleh browser.
+      }
+      container.replaceChildren();
+    };
+  }, [active, restartOnEnd, videoId]);
+
+  return <div className="video-player" ref={containerRef} aria-label={title} />;
+}
 const DEFAULT_IQAMAH_DELAYS: TimingMap = {
   Subuh: 7,
   Dzuhur: 7,
@@ -305,6 +435,7 @@ export default function Home() {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     if (displayPhase.type !== "normal") return;
     if (!displaySlides.length) return;
+    if (displaySlides[activeSlide]?.kind === "youtube") return;
     const duration = Math.max(5, displaySlides[activeSlide]?.durationSeconds || 12) * 1000;
     const slideTimer = window.setTimeout(
       () => setActiveSlide((current) => (current + 1) % displaySlides.length),
@@ -627,16 +758,15 @@ export default function Home() {
               ) : slide.kind === "poster" && slide.imageUrl ? (
                 <img src={slide.imageUrl} alt={slide.title || "Poster kegiatan Masjid Al-Hidayah"} />
               ) : (
-                <div className="video-player">
-                  {activeSlide === index && displayPhase.type === "normal" && slide.youtubeId && (
-                    <iframe
-                      src={`https://www.youtube-nocookie.com/embed/${slide.youtubeId}?autoplay=1&mute=1&loop=1&playlist=${slide.youtubeId}&playsinline=1&rel=0`}
-                      title={slide.title || "Video Masjid Al-Hidayah"}
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                      allowFullScreen
-                    />
-                  )}
-                </div>
+                slide.youtubeId && (
+                  <YouTubeVideo
+                    videoId={slide.youtubeId}
+                    title={slide.title || "Video Masjid Al-Hidayah"}
+                    active={activeSlide === index && displayPhase.type === "normal"}
+                    restartOnEnd={displaySlides.length === 1}
+                    onEnded={() => setActiveSlide((index + 1) % displaySlides.length)}
+                  />
+                )
               )}
             </div>
           ))}
