@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
+const APP_VERSION = "2026.08.08.1";
 
 type Prayer = { name: string; adhan: string; iqamah: string };
 type DisplayPhase =
@@ -165,6 +166,7 @@ export default function Home() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [prayerSchedule, setPrayerSchedule] = useState<Prayer[]>(FALLBACK_SCHEDULE);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [availableVersion, setAvailableVersion] = useState<string | null>(null);
   const displayPhase: DisplayPhase = now
     ? getDisplayPhase(now, prayerSchedule)
     : { type: "normal" };
@@ -240,6 +242,38 @@ export default function Home() {
       window.clearInterval(refreshTimer);
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkForUpdates = async () => {
+      try {
+        const response = await fetch("/version.json?t=" + Date.now(), { cache: "no-store" });
+        if (!response.ok) return;
+        const data = (await response.json()) as { version?: string };
+        if (!cancelled && data.version && data.version !== APP_VERSION) {
+          setAvailableVersion(data.version);
+        }
+      } catch {
+        // Pemeriksaan berikutnya akan mencoba lagi saat koneksi tersedia.
+      }
+    };
+
+    void checkForUpdates();
+    const updateTimer = window.setInterval(checkForUpdates, 60 * 1000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(updateTimer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!availableVersion || displayPhase.type !== "normal") return;
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set("v", availableVersion);
+    window.location.replace(nextUrl.toString());
+  }, [availableVersion, displayPhase.type]);
 
   const nextIqamah = useMemo(
     () => (now ? getNextIqamah(now, prayerSchedule) : null),

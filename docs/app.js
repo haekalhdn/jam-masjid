@@ -1,6 +1,7 @@
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
+const APP_VERSION = "2026.08.08.1";
 
 let prayerSchedule = [
   { name: "Subuh", adhan: "04:46", iqamah: "04:53" },
@@ -10,6 +11,7 @@ let prayerSchedule = [
   { name: "Isya", adhan: "19:09", iqamah: "19:16" },
 ];
 let displayMode = "normal";
+let pendingVersion = null;
 
 const dateKeyFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: TIME_ZONE,
@@ -126,6 +128,29 @@ function formatCountdown(totalSeconds) {
   return String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
 }
 
+function applyUpdate(version) {
+  const nextUrl = new URL(window.location.href);
+  nextUrl.searchParams.set("v", version);
+  window.location.replace(nextUrl.toString());
+}
+
+async function checkForUpdates() {
+  try {
+    const response = await fetch("./version.json?t=" + Date.now(), { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (!data.version || data.version === APP_VERSION) return;
+
+    if (displayMode === "normal") {
+      applyUpdate(data.version);
+    } else {
+      pendingVersion = data.version;
+    }
+  } catch {
+    // Pemeriksaan berikutnya akan mencoba lagi saat koneksi tersedia.
+  }
+}
+
 function updatePrayerCards() {
   document.querySelectorAll(".prayer-card").forEach((card) => {
     const prayer = prayerSchedule.find((item) => item.name === card.dataset.prayer);
@@ -215,6 +240,10 @@ function updateDisplay() {
   document.querySelectorAll(".prayer-card").forEach((card) => {
     card.classList.toggle("active", card.dataset.prayer === next.prayer.name);
   });
+
+  if (displayMode === "normal" && pendingVersion) {
+    applyUpdate(pendingVersion);
+  }
 }
 
 const fullscreenButton = document.querySelector("#fullscreen-button");
@@ -299,5 +328,7 @@ scheduleNextSlide();
 updatePrayerCards();
 updateDisplay();
 void loadDepokSchedule();
+void checkForUpdates();
 window.setInterval(updateDisplay, 1000);
 window.setInterval(loadDepokSchedule, 60 * 60 * 1000);
+window.setInterval(checkForUpdates, 60 * 1000);
