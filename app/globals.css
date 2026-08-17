@@ -1107,7 +1107,7 @@ button {
 .prayer-card h3 {
   margin: 0;
   font-family: Georgia, serif;
-  font-size: clamp(22px, 1.68vw, 32px);
+  font-size: clamp(24px, 1.82vw, 35px);
   font-weight: 500;
 }
 
@@ -1130,14 +1130,14 @@ button {
   display: block;
   margin-bottom: 4px;
   color: var(--muted);
-  font-size: clamp(10px, 0.68vw, 13px);
+  font-size: clamp(11px, 0.74vw, 14px);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .prayer-times strong {
   font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: clamp(20px, 1.62vw, 30px);
+  font-size: clamp(22px, 1.86vw, 34px);
   font-weight: 520;
 }
 

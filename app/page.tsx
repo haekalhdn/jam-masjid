@@ -6,7 +6,7 @@ const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
-const APP_VERSION = "2026.08.17.7";
+const APP_VERSION = "2026.08.17.8";
 const UPDATE_ATTEMPT_KEY = "jam-masjid-update-attempt";
 
 type PrayerName = "Subuh" | "Dzuhur" | "Ashar" | "Maghrib" | "Isya";
@@ -950,11 +950,11 @@ export default function Home() {
             <p className="eyebrow">JADWAL KOTA DEPOK</p>
             <h2 id="schedule-title">Waktu Sholat</h2>
           </div>
-          <p className={"section-reminder" + (isSimulation ? " simulation" : "")}>
-            {isSimulation
-              ? "MODE SIMULASI • Maghrib dimulai sekitar 3 menit lagi"
-              : "“Laksanakanlah salat untuk mengingat Aku.” • QS. Taha: 14"}
-          </p>
+          {isSimulation && (
+            <p className="section-reminder simulation">
+              MODE SIMULASI • Maghrib dimulai sekitar 3 menit lagi
+            </p>
+          )}
         </div>
 
         <div className="prayer-grid">
