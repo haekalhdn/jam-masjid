@@ -217,7 +217,7 @@ button {
 .countdown-kicker {
   margin: 0 0 5px;
   color: var(--gold);
-  font-size: clamp(10px, 0.73vw, 14px);
+  font-size: clamp(11px, 0.8vw, 15px);
   font-weight: 720;
   letter-spacing: 0.23em;
 }
@@ -231,14 +231,14 @@ button {
 }
 
 .brand h1 {
-  font-size: clamp(24px, 2.2vw, 42px);
+  font-size: clamp(26px, 2.35vw, 45px);
   letter-spacing: -0.025em;
 }
 
 .brand-location {
   margin: 5px 0 0;
   color: var(--muted);
-  font-size: clamp(10px, 0.72vw, 13px);
+  font-size: clamp(11px, 0.78vw, 14px);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -278,7 +278,7 @@ button {
   border-radius: 999px;
   color: #c4cec8;
   background: rgba(255, 255, 255, 0.035);
-  font-size: clamp(11px, 0.78vw, 14px);
+  font-size: clamp(12px, 0.85vw, 15px);
 }
 
 .status-dot {
@@ -328,7 +328,7 @@ button {
 .clock-label {
   gap: 12px;
   color: var(--muted);
-  font-size: clamp(12px, 0.9vw, 16px);
+  font-size: clamp(13px, 0.98vw, 18px);
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -375,7 +375,7 @@ button {
   flex-wrap: wrap;
   gap: 12px;
   color: #c5cdc8;
-  font-size: clamp(13px, 1.05vw, 19px);
+  font-size: clamp(14px, 1.13vw, 21px);
 }
 
 .date-row p {
@@ -411,7 +411,7 @@ button {
 
 .daily-time span {
   color: var(--muted);
-  font-size: clamp(9px, 0.62vw, 12px);
+  font-size: clamp(10px, 0.68vw, 13px);
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -420,7 +420,7 @@ button {
 .daily-time strong {
   color: var(--gold-bright);
   font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: clamp(18px, 1.35vw, 26px);
+  font-size: clamp(20px, 1.46vw, 28px);
   font-weight: 520;
 }
 
@@ -448,7 +448,7 @@ button {
 .qris-frame {
   position: relative;
   overflow: hidden;
-  flex: 0 0 clamp(145px, 10.8vw, 210px);
+  flex: 0 0 clamp(140px, 10.5vw, 205px);
   aspect-ratio: 1;
   border: 5px solid #fff;
   border-radius: 11px;
@@ -477,7 +477,7 @@ button {
 .donation-details small {
   display: block;
   color: var(--muted);
-  font-size: clamp(9px, 0.65vw, 12px);
+  font-size: clamp(10px, 0.71vw, 13px);
   line-height: 1.35;
 }
 
@@ -486,15 +486,15 @@ button {
   display: block;
   color: var(--gold-bright);
   font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: clamp(17px, 1.35vw, 26px);
+  font-size: clamp(18px, 1.45vw, 28px);
   line-height: 1.2;
   white-space: nowrap;
 }
 
 .donation-details b {
   max-width: 100%;
-  font-size: clamp(14px, 1.05vw, 20px);
-  letter-spacing: -0.035em;
+  font-size: clamp(15px, 1.12vw, 21px);
+  letter-spacing: -0.07em;
 }
 
 .donation-details small + span {
@@ -554,7 +554,7 @@ button {
   max-width: 760px;
   margin: 7px 0 0;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(30px, 2.7vw, 52px);
+  font-size: clamp(32px, 2.9vw, 56px);
   font-weight: 500;
   line-height: 1.05;
 }
@@ -575,17 +575,17 @@ button {
 
 .agenda-item strong {
   color: var(--gold-bright);
-  font-size: clamp(14px, 1.05vw, 20px);
+  font-size: clamp(15px, 1.14vw, 22px);
 }
 
 .agenda-item span {
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(16px, 1.25vw, 24px);
+  font-size: clamp(18px, 1.36vw, 26px);
 }
 
 .agenda-item small {
   color: #bdc9c2;
-  font-size: clamp(11px, 0.78vw, 15px);
+  font-size: clamp(12px, 0.85vw, 16px);
   text-align: right;
 }
 
@@ -603,7 +603,7 @@ button {
   max-width: 780px;
   margin: 8px 0 0;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(30px, 3vw, 58px);
+  font-size: clamp(32px, 3.2vw, 62px);
   font-weight: 500;
   line-height: 1.06;
 }
@@ -627,7 +627,7 @@ button {
 .friday-details span {
   margin-bottom: 7px;
   color: var(--gold-bright);
-  font-size: clamp(10px, 0.72vw, 13px);
+  font-size: clamp(11px, 0.8vw, 14px);
   font-weight: 750;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -635,7 +635,7 @@ button {
 
 .friday-details strong {
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(18px, 1.5vw, 28px);
+  font-size: clamp(20px, 1.62vw, 30px);
   font-weight: 500;
 }
 
@@ -652,14 +652,14 @@ button {
 .finance-heading h2 {
   margin: 8px 0 0;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(34px, 3.2vw, 62px);
+  font-size: clamp(36px, 3.4vw, 66px);
   font-weight: 500;
 }
 
 .finance-heading p:last-child {
   margin: 8px 0 0;
   color: var(--muted);
-  font-size: clamp(11px, 0.8vw, 15px);
+  font-size: clamp(12px, 0.88vw, 17px);
 }
 
 .finance-metrics {
@@ -689,7 +689,7 @@ button {
 .finance-metric span {
   margin-bottom: 8px;
   color: var(--muted);
-  font-size: clamp(9px, 0.67vw, 12px);
+  font-size: clamp(10px, 0.74vw, 13px);
   font-weight: 750;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -698,7 +698,7 @@ button {
 .finance-metric strong {
   color: #f8f2e5;
   font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: clamp(18px, 1.58vw, 30px);
+  font-size: clamp(20px, 1.7vw, 32px);
   font-weight: 540;
   white-space: nowrap;
 }
@@ -832,14 +832,14 @@ button {
 }
 
 .section-heading h2 {
-  font-size: clamp(26px, 2vw, 38px);
+  font-size: clamp(28px, 2.15vw, 41px);
 }
 
 .section-reminder {
   margin: 0;
   color: var(--muted);
   font-family: Georgia, serif;
-  font-size: clamp(13px, 0.96vw, 17px);
+  font-size: clamp(14px, 1.04vw, 19px);
   font-style: italic;
 }
 
@@ -903,13 +903,13 @@ button {
 .prayer-card h3 {
   margin: 0;
   font-family: Georgia, serif;
-  font-size: clamp(20px, 1.55vw, 29px);
+  font-size: clamp(22px, 1.68vw, 32px);
   font-weight: 500;
 }
 
 .prayer-icon {
   color: var(--gold);
-  font-size: clamp(18px, 1.4vw, 25px);
+  font-size: clamp(20px, 1.52vw, 27px);
 }
 
 .prayer-times {
@@ -926,14 +926,14 @@ button {
   display: block;
   margin-bottom: 4px;
   color: var(--muted);
-  font-size: clamp(9px, 0.61vw, 12px);
+  font-size: clamp(10px, 0.68vw, 13px);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .prayer-times strong {
   font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: clamp(18px, 1.5vw, 28px);
+  font-size: clamp(20px, 1.62vw, 30px);
   font-weight: 520;
 }
 
@@ -961,7 +961,7 @@ button {
   padding: 0 clamp(24px, 3.3vw, 68px);
   color: #102d25;
   background: var(--gold-bright);
-  font-size: clamp(10px, 0.68vw, 13px);
+  font-size: clamp(11px, 0.75vw, 14px);
   font-weight: 850;
   letter-spacing: 0.13em;
 }
@@ -981,7 +981,7 @@ button {
   margin: 0;
   padding-left: 100%;
   color: #d4dcd7;
-  font-size: clamp(12px, 0.9vw, 17px);
+  font-size: clamp(13px, 0.98vw, 19px);
   letter-spacing: 0.025em;
   white-space: nowrap;
   animation: ticker 34s linear infinite;
