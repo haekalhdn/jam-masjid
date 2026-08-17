@@ -93,7 +93,7 @@ const menuKeyboard = {
     [{ text: "🖼 Tambah poster" }, { text: "🗑 Hapus poster" }],
     [{ text: "▶️ Ganti YouTube" }, { text: "🗑 Hapus YouTube" }],
     [{ text: "📢 Ubah info TV" }, { text: "👁 Tampilkan info" }],
-    [{ text: "🙈 Sembunyikan info" }],
+    [{ text: "🔕 Sembunyikan info" }],
     [{ text: "⏱ Atur iqomah" }, { text: "🕌 Durasi sholat" }],
     [{ text: "🕋 Mode Jumat" }, { text: "👤 Undang admin" }],
     [{ text: "📋 Lihat konten" }, { text: "❌ Batal" }],
@@ -820,7 +820,7 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate) {
     return;
   }
 
-  if (text === "🙈 Sembunyikan info" || text === "🧹 Sembunyikan info" || text === "/hapusinfo" || text === "/sembunyikaninfo") {
+  if (text === "🔕 Sembunyikan info" || text === "🙈 Sembunyikan info" || text === "🧹 Sembunyikan info" || text === "/hapusinfo" || text === "/sembunyikaninfo") {
     await clearTicker(env, message.chat.id, user.id);
     return;
   }
