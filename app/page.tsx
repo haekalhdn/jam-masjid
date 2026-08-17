@@ -6,7 +6,7 @@ const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
-const APP_VERSION = "2026.08.17.5";
+const APP_VERSION = "2026.08.17.6";
 const UPDATE_ATTEMPT_KEY = "jam-masjid-update-attempt";
 
 type PrayerName = "Subuh" | "Dzuhur" | "Ashar" | "Maghrib" | "Isya";
@@ -16,6 +16,7 @@ type Prayer = { name: PrayerName; adhan: string; iqamah: string };
 type DailyTimes = { imsak: string; syuruk: string };
 type FridaySettings = { theme: string; khatib: string; imam: string };
 type FinanceSummary = { period: string; income: number; expense: number; balance: number };
+type DonorSummary = { period: string; names: string[] };
 type ContentSlide = {
   id: number;
   kind: "poster" | "youtube";
@@ -25,7 +26,7 @@ type ContentSlide = {
   durationSeconds: number;
 };
 type FridaySlide = FridaySettings & { id: "friday"; kind: "friday"; durationSeconds: number };
-type FinanceSlide = FinanceSummary & { id: "finance"; kind: "finance"; durationSeconds: number };
+type FinanceSlide = FinanceSummary & { id: "finance"; kind: "finance"; durationSeconds: number; donors: DonorSummary | null };
 type DisplaySlide = ContentSlide | FridaySlide | FinanceSlide;
 type YouTubePlayerInstance = {
   destroy: () => void;
@@ -288,6 +289,37 @@ function formatHijriDate(date: Date) {
 
 const rupiahFormatter = new Intl.NumberFormat("id-ID");
 
+function financeUsagePercent(income: number, expense: number) {
+  if (income <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((expense / income) * 100)));
+}
+
+function AnimatedRupiah({ amount, active }: { amount: number; active: boolean }) {
+  const [visibleAmount, setVisibleAmount] = useState(amount);
+
+  useEffect(() => {
+    if (!active || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setVisibleAmount(amount);
+      return;
+    }
+
+    let frame = 0;
+    const startedAt = performance.now();
+    const duration = 950;
+    const animate = (time: number) => {
+      const progress = Math.min(1, (time - startedAt) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setVisibleAmount(Math.round(amount * eased));
+      if (progress < 1) frame = window.requestAnimationFrame(animate);
+    };
+    setVisibleAmount(0);
+    frame = window.requestAnimationFrame(animate);
+    return () => window.cancelAnimationFrame(frame);
+  }, [active, amount]);
+
+  return <>Rp{rupiahFormatter.format(visibleAmount)}</>;
+}
+
 const weekdayFormatter = new Intl.DateTimeFormat("id-ID", {
   timeZone: TIME_ZONE,
   weekday: "long",
@@ -418,6 +450,7 @@ export default function Home() {
   const [dailyTimes, setDailyTimes] = useState<DailyTimes>(FALLBACK_DAILY_TIMES);
   const [contentSlides, setContentSlides] = useState<ContentSlide[]>([]);
   const [finance, setFinance] = useState<FinanceSummary | null>(null);
+  const [donors, setDonors] = useState<DonorSummary | null>(null);
   const [ticker, setTicker] = useState("");
   const [prayerDurations, setPrayerDurations] = useState<PrayerDurationMap>(DEFAULT_PRAYER_DURATIONS);
   const [fridaySettings, setFridaySettings] = useState<FridaySettings>(DEFAULT_FRIDAY_SETTINGS);
@@ -436,11 +469,11 @@ export default function Home() {
         ? [{ id: "friday" as const, kind: "friday" as const, durationSeconds: 15, ...fridaySettings }]
         : []),
       ...(finance
-        ? [{ id: "finance" as const, kind: "finance" as const, durationSeconds: 12, ...finance }]
+        ? [{ id: "finance" as const, kind: "finance" as const, durationSeconds: donors?.names.length ? 15 : 12, donors, ...finance }]
         : []),
       ...contentSlides,
     ],
-    [contentSlides, finance, fridayMode, fridaySettings],
+    [contentSlides, donors, finance, fridayMode, fridaySettings],
   );
 
   useEffect(() => {
@@ -488,6 +521,7 @@ export default function Home() {
           prayerDurations?: Partial<PrayerDurationMap>;
           friday?: Partial<FridaySettings>;
           finance?: FinanceSummary | null;
+          donors?: DonorSummary | null;
         };
         if (cancelled) return;
         const nextSignature = JSON.stringify(data);
@@ -510,6 +544,7 @@ export default function Home() {
         );
         setContentSlides(Array.isArray(data.slides) ? data.slides : []);
         setFinance(data.finance || null);
+        setDonors(data.donors?.names?.length ? data.donors : null);
         setTicker(typeof data.ticker === "string" ? data.ticker.trim() : "");
         setActiveSlide(0);
       } catch {
@@ -823,15 +858,37 @@ export default function Home() {
                 </>
               ) : slide.kind === "finance" ? (
                 <>
+                  <span className="finance-ornament" aria-hidden="true">✦</span>
                   <div className="finance-heading">
                     <p className="eyebrow">TRANSPARANSI KEUANGAN MASJID</p>
                     <h2>Kas DKM • {slide.period}</h2>
-                    <p>Ringkasan dari laporan bendahara • diperbarui otomatis</p>
                   </div>
+                  <div className="finance-balance">
+                    <div className="finance-balance-value">
+                      <span>Saldo kas saat ini</span>
+                      <strong><AnimatedRupiah amount={slide.balance} active={activeSlide === index} /></strong>
+                    </div>
+                    <div className="finance-usage">
+                      <div><span>Pengeluaran periode ini</span><b>{financeUsagePercent(slide.income, slide.expense)}% dari pemasukan</b></div>
+                      <div className="finance-usage-track" aria-hidden="true">
+                        <i style={{ width: `${financeUsagePercent(slide.income, slide.expense)}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                  {slide.donors?.names.length ? (
+                    <div className="donor-ribbon">
+                      <span>JAZAKUMULLAHU KHAIRAN</span>
+                      <div className="donor-marquee">
+                        <div className="donor-track" style={{ animationDuration: `${Math.max(70, slide.donors.names.length * 2.5)}s` }}>
+                          <p>Donatur dan jamaah {slide.donors.period} • {slide.donors.names.join(" • ")}</p>
+                          <p aria-hidden="true">Donatur dan jamaah {slide.donors.period} • {slide.donors.names.join(" • ")}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="finance-metrics">
-                    <div className="finance-metric"><span>Pemasukan</span><strong>Rp{rupiahFormatter.format(slide.income)}</strong></div>
-                    <div className="finance-metric"><span>Pengeluaran</span><strong>Rp{rupiahFormatter.format(slide.expense)}</strong></div>
-                    <div className="finance-metric balance"><span>Saldo</span><strong>Rp{rupiahFormatter.format(slide.balance)}</strong></div>
+                    <div className="finance-metric"><span>Pemasukan</span><strong><AnimatedRupiah amount={slide.income} active={activeSlide === index} /></strong></div>
+                    <div className="finance-metric expense"><span>Pengeluaran</span><strong><AnimatedRupiah amount={slide.expense} active={activeSlide === index} /></strong></div>
                   </div>
                 </>
               ) : slide.kind === "poster" && slide.imageUrl ? (

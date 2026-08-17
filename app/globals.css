@@ -432,7 +432,9 @@ button {
 }
 
 .donation-card {
+  position: relative;
   display: flex;
+  isolation: isolate;
   overflow: hidden;
   width: min(100%, 500px);
   gap: clamp(12px, 1.1vw, 20px);
@@ -443,6 +445,27 @@ button {
   border-radius: 18px;
   background: linear-gradient(145deg, rgba(18, 65, 53, 0.9), rgba(5, 29, 24, 0.93));
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.2), inset 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.donation-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 3;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(110deg, transparent 24%, rgba(255, 247, 214, 0.85) 48%, rgba(214, 181, 109, 0.62) 54%, transparent 76%);
+  background-size: 280% 100%;
+  pointer-events: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: donation-border-shine 9s ease-in-out infinite;
+}
+
+.donation-card > * {
+  position: relative;
+  z-index: 1;
 }
 
 .qris-frame {
@@ -466,7 +489,32 @@ button {
 }
 
 .donation-details {
+  position: relative;
+  overflow: hidden;
   min-width: 0;
+}
+
+.donation-details::after {
+  content: "";
+  position: absolute;
+  inset: -25% auto -25% -45%;
+  width: 24%;
+  background: linear-gradient(90deg, transparent, rgba(255, 249, 224, 0.2), transparent);
+  transform: translateX(-220%) skewX(-18deg);
+  pointer-events: none;
+  animation: donation-copy-shine 9s ease-in-out infinite;
+}
+
+@keyframes donation-border-shine {
+  0%, 58% { background-position: 130% 50%; opacity: 0.35; }
+  78% { opacity: 1; }
+  100% { background-position: -130% 50%; opacity: 0.35; }
+}
+
+@keyframes donation-copy-shine {
+  0%, 62% { transform: translateX(-220%) skewX(-18deg); opacity: 0; }
+  70% { opacity: 1; }
+  90%, 100% { transform: translateX(720%) skewX(-18deg); opacity: 0; }
 }
 
 .donation-details .eyebrow {
@@ -640,45 +688,196 @@ button {
 }
 
 .finance-slide {
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: clamp(28px, 2.8vw, 52px);
+  gap: clamp(8px, 1vh, 12px);
+  padding: clamp(24px, 2.5vw, 46px);
   background:
-    radial-gradient(circle at 86% 12%, rgba(241, 210, 141, 0.22), transparent 30%),
+    radial-gradient(circle at 86% 12%, rgba(241, 210, 141, 0.2), transparent 30%),
+    radial-gradient(circle at 14% 90%, rgba(91, 183, 145, 0.12), transparent 32%),
     linear-gradient(145deg, rgba(22, 78, 64, 0.98), rgba(4, 27, 22, 0.98));
 }
 
-.finance-heading h2 {
-  margin: 8px 0 0;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(36px, 3.4vw, 66px);
-  font-weight: 500;
+.finance-slide::before {
+  content: "";
+  position: absolute;
+  top: -82px;
+  right: -64px;
+  width: clamp(220px, 22vw, 420px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  opacity: 0.12;
+  background:
+    repeating-conic-gradient(from 22.5deg, rgba(241, 210, 141, 0.9) 0 3deg, transparent 3deg 45deg),
+    repeating-radial-gradient(circle, transparent 0 20px, rgba(241, 210, 141, 0.5) 21px 22px);
+  -webkit-mask-image: radial-gradient(circle, #000 20%, transparent 70%);
+  mask-image: radial-gradient(circle, #000 20%, transparent 70%);
 }
 
-.finance-heading p:last-child {
-  margin: 8px 0 0;
+.finance-slide > * {
+  position: relative;
+  z-index: 1;
+}
+
+.finance-ornament {
+  position: absolute;
+  top: clamp(20px, 2vw, 36px);
+  right: clamp(24px, 2.4vw, 42px);
+  color: rgba(241, 210, 141, 0.62);
+  font-size: clamp(18px, 1.5vw, 28px);
+  text-shadow: 0 0 24px rgba(241, 210, 141, 0.28);
+}
+
+.finance-heading h2 {
+  margin: 5px 0 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(31px, 3vw, 58px);
+  font-weight: 500;
+  line-height: 1.04;
+}
+
+.finance-balance {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(220px, 0.95fr);
+  gap: clamp(14px, 1.5vw, 26px);
+  align-items: center;
+  padding: clamp(10px, 1vw, 16px) clamp(14px, 1.3vw, 22px);
+  border: 1px solid rgba(241, 210, 141, 0.24);
+  border-radius: 16px;
+  background: linear-gradient(120deg, rgba(3, 33, 26, 0.72), rgba(69, 89, 52, 0.25));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.finance-balance-value span,
+.finance-balance-value strong,
+.finance-usage span,
+.finance-usage b {
+  display: block;
+}
+
+.finance-balance-value span,
+.finance-usage span {
+  margin-bottom: 3px;
   color: var(--muted);
-  font-size: clamp(12px, 0.88vw, 17px);
+  font-size: clamp(9px, 0.67vw, 12px);
+  font-weight: 760;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.finance-balance-value strong {
+  color: var(--gold-bright);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: clamp(27px, 2.6vw, 50px);
+  font-weight: 540;
+  letter-spacing: -0.045em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.finance-usage > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.finance-usage b {
+  color: #f4e2b8;
+  font-size: clamp(11px, 0.8vw, 15px);
+  font-weight: 720;
+  white-space: nowrap;
+}
+
+.finance-usage-track {
+  overflow: hidden;
+  height: 7px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.finance-usage-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #63c79d, var(--gold-bright));
+  box-shadow: 0 0 16px rgba(241, 210, 141, 0.3);
+}
+
+.donor-ribbon {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: clamp(34px, 4vh, 42px);
+  overflow: hidden;
+  border: 1px solid rgba(241, 210, 141, 0.18);
+  border-radius: 12px;
+  background: rgba(3, 28, 22, 0.65);
+}
+
+.donor-ribbon > span {
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  padding: 0 clamp(12px, 1.1vw, 18px);
+  color: #183b30;
+  background: linear-gradient(110deg, #d6b56d, #f1d28d);
+  font-size: clamp(9px, 0.65vw, 12px);
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.donor-marquee {
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  mask-image: linear-gradient(to right, transparent, black 3%, black 97%, transparent);
+}
+
+.donor-track {
+  display: flex;
+  flex: none;
+  width: max-content;
+  gap: 50px;
+  animation: donor-ticker 90s linear infinite;
+}
+
+.donor-track p {
+  flex: none;
+  margin: 0;
+  color: #e6ece8;
+  font-size: clamp(11px, 0.82vw, 15px);
+  letter-spacing: 0.025em;
+  white-space: nowrap;
+}
+
+@keyframes donor-ticker {
+  to { transform: translateX(calc(-50% - 25px)); }
 }
 
 .finance-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: clamp(10px, 1.1vw, 18px);
+  padding-right: clamp(88px, 7vw, 118px);
 }
 
 .finance-metric {
   min-width: 0;
-  padding: clamp(14px, 1.45vw, 24px);
+  padding: clamp(10px, 1.05vw, 18px) clamp(14px, 1.35vw, 22px);
   border: 1px solid rgba(241, 210, 141, 0.2);
-  border-radius: 16px;
+  border-radius: 14px;
   background: rgba(4, 32, 26, 0.64);
 }
 
-.finance-metric.balance {
-  border-color: rgba(241, 210, 141, 0.55);
-  background: rgba(100, 89, 49, 0.34);
+.finance-metric.expense {
+  border-color: rgba(241, 210, 141, 0.32);
+  background: rgba(66, 66, 38, 0.25);
 }
 
 .finance-metric span,
@@ -687,7 +886,7 @@ button {
 }
 
 .finance-metric span {
-  margin-bottom: 8px;
+  margin-bottom: 5px;
   color: var(--muted);
   font-size: clamp(10px, 0.74vw, 13px);
   font-weight: 750;
@@ -698,7 +897,7 @@ button {
 .finance-metric strong {
   color: #f8f2e5;
   font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: clamp(20px, 1.7vw, 32px);
+  font-size: clamp(19px, 1.55vw, 30px);
   font-weight: 540;
   white-space: nowrap;
 }
@@ -1138,6 +1337,17 @@ button {
 
   .finance-metrics {
     grid-template-columns: 1fr;
+    padding-right: 0;
+  }
+
+  .finance-balance,
+  .donor-ribbon {
+    grid-template-columns: 1fr;
+  }
+
+  .donor-ribbon > span {
+    min-height: 32px;
+    justify-content: center;
   }
 
   .agenda-item {
@@ -1177,6 +1387,12 @@ button {
     width: auto;
     padding-left: 24px;
     white-space: normal;
+    animation: none;
+  }
+
+  .donation-card::before,
+  .donation-details::after,
+  .donor-track {
     animation: none;
   }
 }

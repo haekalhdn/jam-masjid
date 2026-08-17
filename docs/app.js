@@ -1,7 +1,7 @@
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.17.5";
+const APP_VERSION = "2026.08.17.6";
 const UPDATE_ATTEMPT_KEY = "jam-masjid-update-attempt";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
 const CONTENT_REFRESH_MS = 30 * 1000;
@@ -551,6 +551,35 @@ function scheduleNextSlide() {
   );
 }
 
+function animateFinanceNumbers(slide) {
+  if (!slide?.classList.contains("finance-slide")) return;
+  const values = [...slide.querySelectorAll("[data-finance-amount]")];
+  if (reducedMotion) {
+    values.forEach((value) => {
+      value.textContent = formatRupiah(value.dataset.financeAmount);
+    });
+    return;
+  }
+
+  const animationId = String(performance.now());
+  slide.dataset.financeAnimation = animationId;
+  const startedAt = performance.now();
+  const duration = 950;
+  const animate = (time) => {
+    if (slide.dataset.financeAnimation !== animationId) return;
+    const progress = Math.min(1, (time - startedAt) / duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    values.forEach((value) => {
+      value.textContent = formatRupiah(Math.round(Number(value.dataset.financeAmount || 0) * eased));
+    });
+    if (progress < 1) window.requestAnimationFrame(animate);
+  };
+  values.forEach((value) => {
+    value.textContent = formatRupiah(0);
+  });
+  window.requestAnimationFrame(animate);
+}
+
 function showSlide(index) {
   if (!carouselSlides.length) return;
   activeSlide = index;
@@ -566,6 +595,7 @@ function showSlide(index) {
     if (active) dot.setAttribute("aria-current", "true");
     else dot.removeAttribute("aria-current");
   });
+  animateFinanceNumbers(carouselSlides[activeSlide]);
   scheduleNextSlide();
 }
 
@@ -635,11 +665,28 @@ function formatRupiah(amount) {
   return `Rp${new Intl.NumberFormat("id-ID").format(Number(amount) || 0)}`;
 }
 
-function createFinanceSlide(finance) {
+function financeUsagePercent(income, expense) {
+  if (Number(income) <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((Number(expense) / Number(income)) * 100)));
+}
+
+function createFinanceAmount(amount) {
+  const value = document.createElement("strong");
+  value.dataset.financeAmount = String(Number(amount) || 0);
+  value.textContent = formatRupiah(amount);
+  return value;
+}
+
+function createFinanceSlide(finance, donors) {
   const element = document.createElement("div");
   element.className = "carousel-slide finance-slide";
   element.setAttribute("aria-hidden", "true");
-  element.dataset.durationMs = "12000";
+  element.dataset.durationMs = donors?.names?.length ? "15000" : "12000";
+
+  const ornament = document.createElement("span");
+  ornament.className = "finance-ornament";
+  ornament.setAttribute("aria-hidden", "true");
+  ornament.textContent = "✦";
 
   const heading = document.createElement("div");
   heading.className = "finance-heading";
@@ -648,28 +695,74 @@ function createFinanceSlide(finance) {
   eyebrow.textContent = "TRANSPARANSI KEUANGAN MASJID";
   const title = document.createElement("h2");
   title.textContent = `Kas DKM • ${finance.period}`;
-  const source = document.createElement("p");
-  source.textContent = "Ringkasan dari laporan bendahara • diperbarui otomatis";
-  heading.append(eyebrow, title, source);
+  heading.append(eyebrow, title);
+
+  const balance = document.createElement("div");
+  balance.className = "finance-balance";
+  const balanceValue = document.createElement("div");
+  balanceValue.className = "finance-balance-value";
+  const balanceCaption = document.createElement("span");
+  balanceCaption.textContent = "Saldo kas saat ini";
+  balanceValue.append(balanceCaption, createFinanceAmount(finance.balance));
+
+  const usagePercent = financeUsagePercent(finance.income, finance.expense);
+  const usage = document.createElement("div");
+  usage.className = "finance-usage";
+  const usageCopy = document.createElement("div");
+  const usageLabel = document.createElement("span");
+  usageLabel.textContent = "Pengeluaran periode ini";
+  const usageValue = document.createElement("b");
+  usageValue.textContent = `${usagePercent}% dari pemasukan`;
+  usageCopy.append(usageLabel, usageValue);
+  const usageTrack = document.createElement("div");
+  usageTrack.className = "finance-usage-track";
+  usageTrack.setAttribute("aria-hidden", "true");
+  const usageBar = document.createElement("i");
+  usageBar.style.width = `${usagePercent}%`;
+  usageTrack.append(usageBar);
+  usage.append(usageCopy, usageTrack);
+  balance.append(balanceValue, usage);
+
+  let donorRibbon = null;
+  if (Array.isArray(donors?.names) && donors.names.length) {
+    donorRibbon = document.createElement("div");
+    donorRibbon.className = "donor-ribbon";
+    const donorLabel = document.createElement("span");
+    donorLabel.textContent = "JAZAKUMULLAHU KHAIRAN";
+    const marquee = document.createElement("div");
+    marquee.className = "donor-marquee";
+    const track = document.createElement("div");
+    track.className = "donor-track";
+    track.style.animationDuration = `${Math.max(70, donors.names.length * 2.5)}s`;
+    const donorText = `Donatur dan jamaah ${donors.period || finance.period} • ${donors.names.join(" • ")}`;
+    const firstCopy = document.createElement("p");
+    firstCopy.textContent = donorText;
+    const secondCopy = document.createElement("p");
+    secondCopy.textContent = donorText;
+    secondCopy.setAttribute("aria-hidden", "true");
+    track.append(firstCopy, secondCopy);
+    marquee.append(track);
+    donorRibbon.append(donorLabel, marquee);
+  }
 
   const metrics = document.createElement("div");
   metrics.className = "finance-metrics";
   [
     ["Pemasukan", finance.income, ""],
-    ["Pengeluaran", finance.expense, ""],
-    ["Saldo", finance.balance, "balance"],
+    ["Pengeluaran", finance.expense, "expense"],
   ].forEach(([label, amount, className]) => {
     const item = document.createElement("div");
     item.className = `finance-metric${className ? ` ${className}` : ""}`;
     const caption = document.createElement("span");
     caption.textContent = label;
-    const value = document.createElement("strong");
-    value.textContent = formatRupiah(amount);
+    const value = createFinanceAmount(amount);
     item.append(caption, value);
     metrics.append(item);
   });
 
-  element.append(heading, metrics);
+  element.append(ornament, heading, balance);
+  if (donorRibbon) element.append(donorRibbon);
+  element.append(metrics);
   return element;
 }
 
@@ -679,7 +772,7 @@ function rebuildCarousel(data) {
   const remoteVideos = contentSlides.filter((slide) => slide.kind === "youtube" && slide.youtubeId);
   const nextSlides = [
     ...(isFriday(new Date()) ? [createFridaySlide(fridaySettings)] : []),
-    ...(data.finance ? [createFinanceSlide(data.finance)] : []),
+    ...(data.finance ? [createFinanceSlide(data.finance, data.donors)] : []),
     ...remotePosters.map(createPosterSlide),
     ...remoteVideos.map(createVideoSlide),
   ];

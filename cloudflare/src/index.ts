@@ -41,6 +41,10 @@ type FinanceSummary = {
   expense: number;
   balance: number;
 };
+type DonorSummary = {
+  period: string;
+  names: string[];
+};
 
 const PRAYER_NAMES: PrayerName[] = ["Subuh", "Dzuhur", "Ashar", "Maghrib", "Isya"];
 const PRAYER_DURATION_NAMES = [...PRAYER_NAMES, "Jumat"] as const;
@@ -66,6 +70,8 @@ const DEFAULT_FRIDAY_SETTINGS: FridaySettings = {
 };
 const FINANCE_SHEET_CSV =
   "https://docs.google.com/spreadsheets/d/1VSrTKZEQor1Mrev5_aVTZJrwmnFGFmBJ/gviz/tq?tqx=out:csv&gid=1596803674";
+const DONOR_SHEET_CSV =
+  "https://docs.google.com/spreadsheets/d/1VSrTKZEQor1Mrev5_aVTZJrwmnFGFmBJ/gviz/tq?tqx=out:csv&sheet=INFAK%20RUTIN%20AGUSTUS%202926";
 const INDONESIAN_MONTHS = [
   "Januari",
   "Februari",
@@ -94,6 +100,8 @@ const menuKeyboard = {
     [{ text: "▶️ Ganti YouTube" }, { text: "🗑 Hapus YouTube" }],
     [{ text: "📢 Ubah info TV" }, { text: "👁 Tampilkan info" }],
     [{ text: "🔕 Sembunyikan info" }],
+    [{ text: "👥 Lihat donatur" }, { text: "🔄 Sinkronkan donatur" }],
+    [{ text: "👁 Tampilkan donatur" }, { text: "🔕 Sembunyikan donatur" }],
     [{ text: "⏱ Atur iqomah" }, { text: "🕌 Durasi sholat" }],
     [{ text: "🕋 Mode Jumat" }, { text: "👤 Undang admin" }],
     [{ text: "📋 Lihat konten" }, { text: "❌ Batal" }],
@@ -176,6 +184,34 @@ async function fetchFinanceSummary(): Promise<FinanceSummary | null> {
 
     if (income === null || expense === null || balance === null || income - expense !== balance) return null;
     return { period: financePeriod(rows), income, expense, balance };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchDonorSummary(): Promise<DonorSummary | null> {
+  try {
+    const response = await fetch(DONOR_SHEET_CSV, {
+      headers: { accept: "text/csv" },
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!response.ok) return null;
+
+    const rows = parseCsv(await response.text());
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const row of rows) {
+      const sequence = Number(row[0]?.replace(/[^\d]/g, ""));
+      const name = String(row[1] || "").replace(/\s+/g, " ").trim().slice(0, 90);
+      const amount = parseRupiah(row[2] || "");
+      if (!Number.isInteger(sequence) || sequence < 1 || !name || amount === null || amount <= 0) continue;
+      const key = name.toLocaleUpperCase("id-ID");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      names.push(name);
+    }
+
+    return names.length ? { period: financePeriod(rows), names: names.slice(0, 80) } : null;
   } catch {
     return null;
   }
@@ -441,12 +477,14 @@ async function getSession(env: Env, userId: number) {
 }
 
 async function listContent(env: Env, chatId: number) {
-  const [slides, ticker, tickerEnabled, timings, friday] = await Promise.all([
+  const [slides, ticker, tickerEnabled, donorsEnabled, donors, timings, friday] = await Promise.all([
     env.DB.prepare(
       "SELECT id, kind, title, youtube_id FROM slides WHERE active = 1 ORDER BY sort_order, id",
     ).all<{ id: number; kind: string; title: string | null; youtube_id: string | null }>(),
     env.DB.prepare("SELECT value FROM settings WHERE key = 'ticker'").first<{ value: string }>(),
     env.DB.prepare("SELECT value FROM settings WHERE key = 'ticker_enabled'").first<{ value: string }>(),
+    env.DB.prepare("SELECT value FROM settings WHERE key = 'donors_enabled'").first<{ value: string }>(),
+    fetchDonorSummary(),
     getTimingSettings(env),
     getFridaySettings(env),
   ]);
@@ -463,7 +501,7 @@ async function listContent(env: Env, chatId: number) {
   await sendMessage(
     env,
     chatId,
-    `<b>Konten layar</b>\n${slideText}\n\n<b>Info berjalan</b>\nStatus: ${tickerEnabled?.value === "false" ? "Disembunyikan" : "Ditampilkan"}\n${ticker?.value || "Belum ada teks info"}\n\n<b>Jeda iqomah</b>\n${formatTimingMap(timings.iqamahDelays)}\n\n<b>Durasi mode sholat</b>\n${formatTimingMap(timings.prayerDurations, PRAYER_DURATION_NAMES)}\n\n<b>Mode Jumat</b>\n${formatFridaySettings(friday)}\n\nUntuk menghapus slide, kirim <code>/hapus ID</code>.`,
+    `<b>Konten layar</b>\n${slideText}\n\n<b>Info berjalan</b>\nStatus: ${tickerEnabled?.value === "false" ? "Disembunyikan" : "Ditampilkan"}\n${ticker?.value || "Belum ada teks info"}\n\n<b>Donatur pada kartu kas</b>\nStatus: ${donorsEnabled?.value === "false" ? "Disembunyikan" : "Ditampilkan"}\n${donors ? `${donors.names.length} nama • ${escapeHtml(donors.period)}` : "Data spreadsheet belum terbaca"}\n\n<b>Jeda iqomah</b>\n${formatTimingMap(timings.iqamahDelays)}\n\n<b>Durasi mode sholat</b>\n${formatTimingMap(timings.prayerDurations, PRAYER_DURATION_NAMES)}\n\n<b>Mode Jumat</b>\n${formatFridaySettings(friday)}\n\nUntuk menghapus slide, kirim <code>/hapus ID</code>.`,
   );
 }
 
@@ -594,6 +632,48 @@ async function showTicker(env: Env, chatId: number, userId: number) {
      ON CONFLICT(key) DO UPDATE SET value = 'true', updated_at = CURRENT_TIMESTAMP`,
   ).run();
   await sendMessage(env, chatId, "✅ Info bagian bawah sudah ditampilkan kembali.");
+}
+
+async function listDonors(env: Env, chatId: number, synced = false) {
+  const [donors, enabled] = await Promise.all([
+    fetchDonorSummary(),
+    env.DB.prepare("SELECT value FROM settings WHERE key = 'donors_enabled'").first<{ value: string }>(),
+  ]);
+  if (!donors) {
+    await sendMessage(env, chatId, "Data donatur dari spreadsheet belum dapat dibaca. Coba sinkronkan lagi beberapa saat lagi.");
+    return;
+  }
+  const names = donors.names.map((name: string, index: number) => `${index + 1}. ${escapeHtml(name)}`).join("\n");
+  await sendMessage(
+    env,
+    chatId,
+    `<b>${synced ? "Sinkronisasi donatur berhasil" : "Donatur dan sumber infak"}</b>\nPeriode: ${escapeHtml(donors.period)}\nStatus layar: ${enabled?.value === "false" ? "Disembunyikan" : "Ditampilkan"}\nJumlah: ${donors.names.length}\n\n${names}`,
+  );
+}
+
+async function hideDonors(env: Env, chatId: number, userId: number) {
+  await env.DB.prepare(
+    `INSERT INTO settings(key, value, updated_at)
+     VALUES ('donors_enabled', 'false', CURRENT_TIMESTAMP)
+     ON CONFLICT(key) DO UPDATE SET value = 'false', updated_at = CURRENT_TIMESTAMP`,
+  ).run();
+  await clearSession(env, userId);
+  await sendMessage(env, chatId, "✅ Nama donatur sudah disembunyikan dari kartu Kas DKM.");
+}
+
+async function showDonors(env: Env, chatId: number, userId: number) {
+  const donors = await fetchDonorSummary();
+  await clearSession(env, userId);
+  if (!donors?.names.length) {
+    await sendMessage(env, chatId, "Data donatur dari spreadsheet belum dapat dibaca, jadi belum ditampilkan.");
+    return;
+  }
+  await env.DB.prepare(
+    `INSERT INTO settings(key, value, updated_at)
+     VALUES ('donors_enabled', 'true', CURRENT_TIMESTAMP)
+     ON CONFLICT(key) DO UPDATE SET value = 'true', updated_at = CURRENT_TIMESTAMP`,
+  ).run();
+  await sendMessage(env, chatId, `✅ ${donors.names.length} nama donatur sudah ditampilkan pada kartu Kas DKM.`);
 }
 
 async function promptTimingSetting(
@@ -830,6 +910,26 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate) {
     return;
   }
 
+  if (text === "👥 Lihat donatur" || text === "/donatur") {
+    await listDonors(env, message.chat.id);
+    return;
+  }
+
+  if (text === "🔄 Sinkronkan donatur" || text === "/sinkronkandonatur") {
+    await listDonors(env, message.chat.id, true);
+    return;
+  }
+
+  if (text === "🔕 Sembunyikan donatur" || text === "/sembunyikandonatur") {
+    await hideDonors(env, message.chat.id, user.id);
+    return;
+  }
+
+  if (text === "👁 Tampilkan donatur" || text === "/tampilkandonatur") {
+    await showDonors(env, message.chat.id, user.id);
+    return;
+  }
+
   if (text === "⏱ Atur iqomah" || text === "/iqomah") {
     await promptTimingSetting(env, message.chat.id, user.id, "iqamah");
     return;
@@ -908,7 +1008,7 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate) {
 
 async function publicDisplay(env: Env, request: Request) {
   const url = new URL(request.url);
-  const [slides, settings, finance] = await Promise.all([
+  const [slides, settings, finance, donors] = await Promise.all([
     env.DB.prepare(
       `SELECT id, kind, title, media_key, youtube_id, duration_seconds
        FROM slides WHERE active = 1 ORDER BY sort_order, id`,
@@ -921,13 +1021,14 @@ async function publicDisplay(env: Env, request: Request) {
       duration_seconds: number;
     }>(),
     env.DB.prepare(
-      "SELECT key, value, updated_at FROM settings WHERE key IN ('ticker', 'ticker_enabled', 'iqamah_delays', 'prayer_durations', 'friday_settings')",
+      "SELECT key, value, updated_at FROM settings WHERE key IN ('ticker', 'ticker_enabled', 'donors_enabled', 'iqamah_delays', 'prayer_durations', 'friday_settings')",
     ).all<{
       key: string;
       value: string;
       updated_at: string;
     }>(),
     fetchFinanceSummary(),
+    fetchDonorSummary(),
   ]);
   const settingValues = Object.fromEntries(settings.results.map((row) => [row.key, row.value]));
   const updatedAt = settings.results
@@ -948,6 +1049,8 @@ async function publicDisplay(env: Env, request: Request) {
       ticker: settingValues.ticker_enabled === "false" ? null : settingValues.ticker || null,
       tickerEnabled: settingValues.ticker_enabled !== "false",
       finance,
+      donors: settingValues.donors_enabled === "false" ? null : donors,
+      donorsEnabled: settingValues.donors_enabled !== "false",
       iqamahDelays: parseTimingSetting(settingValues.iqamah_delays, DEFAULT_IQAMAH_DELAYS),
       prayerDurations: parseTimingSetting(settingValues.prayer_durations, DEFAULT_PRAYER_DURATIONS),
       friday: parseFridaySettings(settingValues.friday_settings),
