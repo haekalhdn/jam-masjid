@@ -845,6 +845,11 @@ button {
   width: max-content;
   gap: 50px;
   animation: donor-ticker 90s linear infinite;
+  animation-play-state: paused;
+}
+
+.finance-slide.active .donor-track {
+  animation-play-state: running;
 }
 
 .donor-track p {

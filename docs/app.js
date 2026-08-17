@@ -1,7 +1,7 @@
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.17.6";
+const APP_VERSION = "2026.08.17.7";
 const UPDATE_ATTEMPT_KEY = "jam-masjid-update-attempt";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
 const CONTENT_REFRESH_MS = 30 * 1000;
@@ -545,10 +545,19 @@ function scheduleNextSlide() {
   window.clearTimeout(slideTimer);
   if (reducedMotion || displayMode !== "normal" || !carouselSlides.length) return;
   if (carouselSlides[activeSlide]?.classList.contains("video-slide")) return;
+  if (carouselSlides[activeSlide]?.querySelector(".donor-track")) return;
   slideTimer = window.setTimeout(
     () => showSlide((activeSlide + 1) % carouselSlides.length),
     slideDurations[activeSlide] ?? 12000,
   );
+}
+
+function restartDonorTicker(slide) {
+  const track = slide?.querySelector(".donor-track");
+  if (!track || reducedMotion) return;
+  track.style.animationName = "none";
+  void track.offsetWidth;
+  track.style.removeProperty("animation-name");
 }
 
 function animateFinanceNumbers(slide) {
@@ -595,6 +604,7 @@ function showSlide(index) {
     if (active) dot.setAttribute("aria-current", "true");
     else dot.removeAttribute("aria-current");
   });
+  restartDonorTicker(carouselSlides[activeSlide]);
   animateFinanceNumbers(carouselSlides[activeSlide]);
   scheduleNextSlide();
 }
@@ -670,6 +680,10 @@ function financeUsagePercent(income, expense) {
   return Math.max(0, Math.min(100, Math.round((Number(expense) / Number(income)) * 100)));
 }
 
+function donorCycleDurationSeconds(names) {
+  return Math.max(70, names.length * 2.5);
+}
+
 function createFinanceAmount(amount) {
   const value = document.createElement("strong");
   value.dataset.financeAmount = String(Number(amount) || 0);
@@ -681,7 +695,10 @@ function createFinanceSlide(finance, donors) {
   const element = document.createElement("div");
   element.className = "carousel-slide finance-slide";
   element.setAttribute("aria-hidden", "true");
-  element.dataset.durationMs = donors?.names?.length ? "15000" : "12000";
+  const donorCycleSeconds = Array.isArray(donors?.names) && donors.names.length
+    ? donorCycleDurationSeconds(donors.names)
+    : 0;
+  element.dataset.durationMs = String((donorCycleSeconds || 12) * 1000);
 
   const ornament = document.createElement("span");
   ornament.className = "finance-ornament";
@@ -733,7 +750,7 @@ function createFinanceSlide(finance, donors) {
     marquee.className = "donor-marquee";
     const track = document.createElement("div");
     track.className = "donor-track";
-    track.style.animationDuration = `${Math.max(70, donors.names.length * 2.5)}s`;
+    track.style.animationDuration = `${donorCycleSeconds}s`;
     const donorText = `Donatur dan jamaah ${donors.period || finance.period} • ${donors.names.join(" • ")}`;
     const firstCopy = document.createElement("p");
     firstCopy.textContent = donorText;
@@ -741,6 +758,10 @@ function createFinanceSlide(finance, donors) {
     secondCopy.textContent = donorText;
     secondCopy.setAttribute("aria-hidden", "true");
     track.append(firstCopy, secondCopy);
+    track.addEventListener("animationiteration", () => {
+      if (displayMode !== "normal" || carouselSlides[activeSlide] !== element) return;
+      showSlide((activeSlide + 1) % carouselSlides.length);
+    });
     marquee.append(track);
     donorRibbon.append(donorLabel, marquee);
   }

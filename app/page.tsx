@@ -6,7 +6,7 @@ const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
-const APP_VERSION = "2026.08.17.6";
+const APP_VERSION = "2026.08.17.7";
 const UPDATE_ATTEMPT_KEY = "jam-masjid-update-attempt";
 
 type PrayerName = "Subuh" | "Dzuhur" | "Ashar" | "Maghrib" | "Isya";
@@ -294,6 +294,10 @@ function financeUsagePercent(income: number, expense: number) {
   return Math.max(0, Math.min(100, Math.round((expense / income) * 100)));
 }
 
+function donorCycleDurationSeconds(names: string[]) {
+  return Math.max(70, names.length * 2.5);
+}
+
 function AnimatedRupiah({ amount, active }: { amount: number; active: boolean }) {
   const [visibleAmount, setVisibleAmount] = useState(amount);
 
@@ -469,7 +473,13 @@ export default function Home() {
         ? [{ id: "friday" as const, kind: "friday" as const, durationSeconds: 15, ...fridaySettings }]
         : []),
       ...(finance
-        ? [{ id: "finance" as const, kind: "finance" as const, durationSeconds: donors?.names.length ? 15 : 12, donors, ...finance }]
+        ? [{
+            id: "finance" as const,
+            kind: "finance" as const,
+            durationSeconds: donors?.names.length ? donorCycleDurationSeconds(donors.names) : 12,
+            donors,
+            ...finance,
+          }]
         : []),
       ...contentSlides,
     ],
@@ -498,8 +508,10 @@ export default function Home() {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     if (displayPhase.type !== "normal") return;
     if (!displaySlides.length) return;
-    if (displaySlides[activeSlide]?.kind === "youtube") return;
-    const duration = Math.max(5, displaySlides[activeSlide]?.durationSeconds || 12) * 1000;
+    const currentSlide = displaySlides[activeSlide];
+    if (currentSlide?.kind === "youtube") return;
+    if (currentSlide?.kind === "finance" && currentSlide.donors?.names.length) return;
+    const duration = Math.max(5, currentSlide?.durationSeconds || 12) * 1000;
     const slideTimer = window.setTimeout(
       () => setActiveSlide((current) => (current + 1) % displaySlides.length),
       duration,
@@ -879,7 +891,15 @@ export default function Home() {
                     <div className="donor-ribbon">
                       <span>JAZAKUMULLAHU KHAIRAN</span>
                       <div className="donor-marquee">
-                        <div className="donor-track" style={{ animationDuration: `${Math.max(70, slide.donors.names.length * 2.5)}s` }}>
+                        <div
+                          className="donor-track"
+                          key={`finance-donors-${activeSlide === index ? "active" : "inactive"}`}
+                          onAnimationIteration={() => {
+                            if (activeSlide !== index || displayPhase.type !== "normal") return;
+                            setActiveSlide((index + 1) % displaySlides.length);
+                          }}
+                          style={{ animationDuration: `${donorCycleDurationSeconds(slide.donors.names)}s` }}
+                        >
                           <p>Donatur dan jamaah {slide.donors.period} • {slide.donors.names.join(" • ")}</p>
                           <p aria-hidden="true">Donatur dan jamaah {slide.donors.period} • {slide.donors.names.join(" • ")}</p>
                         </div>
