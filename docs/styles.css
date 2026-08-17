@@ -433,6 +433,7 @@ button {
 
 .donation-card {
   display: flex;
+  overflow: hidden;
   width: min(100%, 500px);
   gap: clamp(12px, 1.1vw, 20px);
   align-items: center;
@@ -488,6 +489,12 @@ button {
   font-size: clamp(17px, 1.35vw, 26px);
   line-height: 1.2;
   white-space: nowrap;
+}
+
+.donation-details b {
+  max-width: 100%;
+  font-size: clamp(14px, 1.05vw, 20px);
+  letter-spacing: -0.035em;
 }
 
 .donation-details small + span {
