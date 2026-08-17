@@ -6,7 +6,7 @@ const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
-const APP_VERSION = "2026.08.17.4";
+const APP_VERSION = "2026.08.17.5";
 const UPDATE_ATTEMPT_KEY = "jam-masjid-update-attempt";
 
 type PrayerName = "Subuh" | "Dzuhur" | "Ashar" | "Maghrib" | "Isya";
@@ -784,7 +784,7 @@ export default function Home() {
           </div>
           <aside className="donation-card" aria-label="Informasi infak dan shadaqah Masjid Al-Hidayah">
             <div className="qris-frame">
-              <img className="qris-source" src="/qris-masjid.jpg" alt="QRIS Masjid Al-Hidayah 03" />
+              <img className="qris-source" src={`/qris-masjid.jpg?v=${APP_VERSION}`} alt="QRIS Masjid Al-Hidayah 03" />
             </div>
             <div className="donation-details">
               <p className="eyebrow">INFAK &amp; SHADAQAH</p>
