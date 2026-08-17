@@ -1,7 +1,7 @@
 const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
-const APP_VERSION = "2026.08.08.13";
+const APP_VERSION = "2026.08.17.2";
 const UPDATE_ATTEMPT_KEY = "jam-masjid-update-attempt";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
 const CONTENT_REFRESH_MS = 30 * 1000;
@@ -89,12 +89,33 @@ const dateFormatter = new Intl.DateTimeFormat("id-ID", {
   year: "numeric",
 });
 
-const hijriFormatter = new Intl.DateTimeFormat("id-ID-u-ca-islamic", {
+const hijriFormatter = new Intl.DateTimeFormat("id-ID-u-ca-islamic-umalqura", {
   timeZone: TIME_ZONE,
   day: "numeric",
   month: "long",
   year: "numeric",
 });
+const KEMENAG_HIJRI_STARTS_2026 = [
+  { start: "2026-06-16", month: "Muharam", year: 1448 },
+  { start: "2026-07-15", month: "Safar", year: 1448 },
+  { start: "2026-08-14", month: "Rabiulawal", year: 1448 },
+  { start: "2026-09-13", month: "Rabiulakhir", year: 1448 },
+  { start: "2026-10-12", month: "Jumadilawal", year: 1448 },
+  { start: "2026-11-11", month: "Jumadilakhir", year: 1448 },
+  { start: "2026-12-10", month: "Rajab", year: 1448 },
+];
+
+function formatHijriDate(date) {
+  const dateKey = dateKeyFormatter.format(date);
+  if (dateKey >= KEMENAG_HIJRI_STARTS_2026[0].start && dateKey <= "2026-12-31") {
+    const month = [...KEMENAG_HIJRI_STARTS_2026].reverse().find((item) => item.start <= dateKey);
+    if (month) {
+      const day = Math.round((Date.parse(`${dateKey}T00:00:00Z`) - Date.parse(`${month.start}T00:00:00Z`)) / 86400000) + 1;
+      return `${day} ${month.month} ${month.year} H`;
+    }
+  }
+  return hijriFormatter.format(date);
+}
 
 const weekdayFormatter = new Intl.DateTimeFormat("id-ID", {
   timeZone: TIME_ZONE,
@@ -390,7 +411,7 @@ function updateDisplay() {
   document.querySelector("#clock-second").textContent = String(second).padStart(2, "0");
   document.querySelector("#clock").setAttribute("aria-label", clockFormatter.format(now));
   document.querySelector("#current-date").textContent = dateFormatter.format(now);
-  document.querySelector("#hijri-date").textContent = hijriFormatter.format(now);
+  document.querySelector("#hijri-date").textContent = formatHijriDate(now);
   document.querySelectorAll(".prayer-card").forEach((card) => {
     card.classList.toggle("active", card.dataset.prayer === next.prayer.name);
   });
@@ -610,11 +631,55 @@ function createFridaySlide(settings) {
   return element;
 }
 
+function formatRupiah(amount) {
+  return `Rp${new Intl.NumberFormat("id-ID").format(Number(amount) || 0)}`;
+}
+
+function createFinanceSlide(finance) {
+  const element = document.createElement("div");
+  element.className = "carousel-slide finance-slide";
+  element.setAttribute("aria-hidden", "true");
+  element.dataset.durationMs = "12000";
+
+  const heading = document.createElement("div");
+  heading.className = "finance-heading";
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "eyebrow";
+  eyebrow.textContent = "TRANSPARANSI KEUANGAN MASJID";
+  const title = document.createElement("h2");
+  title.textContent = `Kas DKM • ${finance.period}`;
+  const source = document.createElement("p");
+  source.textContent = "Ringkasan dari laporan bendahara • diperbarui otomatis";
+  heading.append(eyebrow, title, source);
+
+  const metrics = document.createElement("div");
+  metrics.className = "finance-metrics";
+  [
+    ["Pemasukan", finance.income, ""],
+    ["Pengeluaran", finance.expense, ""],
+    ["Saldo", finance.balance, "balance"],
+  ].forEach(([label, amount, className]) => {
+    const item = document.createElement("div");
+    item.className = `finance-metric${className ? ` ${className}` : ""}`;
+    const caption = document.createElement("span");
+    caption.textContent = label;
+    const value = document.createElement("strong");
+    value.textContent = formatRupiah(amount);
+    item.append(caption, value);
+    metrics.append(item);
+  });
+
+  element.append(heading, metrics);
+  return element;
+}
+
 function rebuildCarousel(data) {
-  const remotePosters = data.slides.filter((slide) => slide.kind === "poster" && slide.imageUrl);
-  const remoteVideos = data.slides.filter((slide) => slide.kind === "youtube" && slide.youtubeId);
+  const contentSlides = Array.isArray(data.slides) ? data.slides : [];
+  const remotePosters = contentSlides.filter((slide) => slide.kind === "poster" && slide.imageUrl);
+  const remoteVideos = contentSlides.filter((slide) => slide.kind === "youtube" && slide.youtubeId);
   const nextSlides = [
     ...(isFriday(new Date()) ? [createFridaySlide(fridaySettings)] : []),
+    ...(data.finance ? [createFinanceSlide(data.finance)] : []),
     ...remotePosters.map(createPosterSlide),
     ...remoteVideos.map(createVideoSlide),
   ];

@@ -35,6 +35,12 @@ type PrayerName = "Subuh" | "Dzuhur" | "Ashar" | "Maghrib" | "Isya";
 type TimingMap = Record<PrayerName, number>;
 type PrayerDurationMap = TimingMap & { Jumat: number };
 type FridaySettings = { theme: string; khatib: string; imam: string };
+type FinanceSummary = {
+  period: string;
+  income: number;
+  expense: number;
+  balance: number;
+};
 
 const PRAYER_NAMES: PrayerName[] = ["Subuh", "Dzuhur", "Ashar", "Maghrib", "Isya"];
 const PRAYER_DURATION_NAMES = [...PRAYER_NAMES, "Jumat"] as const;
@@ -58,6 +64,22 @@ const DEFAULT_FRIDAY_SETTINGS: FridaySettings = {
   khatib: "Akan diumumkan",
   imam: "Akan diumumkan",
 };
+const FINANCE_SHEET_CSV =
+  "https://docs.google.com/spreadsheets/d/1VSrTKZEQor1Mrev5_aVTZJrwmnFGFmBJ/gviz/tq?tqx=out:csv&gid=1596803674";
+const INDONESIAN_MONTHS = [
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
+];
 
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
@@ -70,7 +92,8 @@ const menuKeyboard = {
   keyboard: [
     [{ text: "🖼 Tambah poster" }, { text: "🗑 Hapus poster" }],
     [{ text: "▶️ Ganti YouTube" }, { text: "🗑 Hapus YouTube" }],
-    [{ text: "📢 Ubah info TV" }, { text: "🧹 Sembunyikan info" }],
+    [{ text: "📢 Ubah info TV" }, { text: "👁 Tampilkan info" }],
+    [{ text: "🙈 Sembunyikan info" }],
     [{ text: "⏱ Atur iqomah" }, { text: "🕌 Durasi sholat" }],
     [{ text: "🕋 Mode Jumat" }, { text: "👤 Undang admin" }],
     [{ text: "📋 Lihat konten" }, { text: "❌ Batal" }],
@@ -78,6 +101,85 @@ const menuKeyboard = {
   resize_keyboard: true,
   is_persistent: true,
 };
+
+function parseCsv(csv: string) {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let value = "";
+  let quoted = false;
+
+  for (let index = 0; index < csv.length; index += 1) {
+    const character = csv[index];
+    if (character === '"') {
+      if (quoted && csv[index + 1] === '"') {
+        value += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === "," && !quoted) {
+      row.push(value.trim());
+      value = "";
+    } else if ((character === "\n" || character === "\r") && !quoted) {
+      if (character === "\r" && csv[index + 1] === "\n") index += 1;
+      row.push(value.trim());
+      if (row.some(Boolean)) rows.push(row);
+      row = [];
+      value = "";
+    } else {
+      value += character;
+    }
+  }
+
+  row.push(value.trim());
+  if (row.some(Boolean)) rows.push(row);
+  return rows;
+}
+
+function parseRupiah(value: string) {
+  const amount = Number(value.replace(/[^\d-]/g, ""));
+  return Number.isFinite(amount) ? amount : null;
+}
+
+function financePeriod(rows: string[][]) {
+  const header = rows.flat().join(" ");
+  const month = INDONESIAN_MONTHS.find((name) => new RegExp(`\\b${name}\\b`, "i").test(header));
+  const explicitYear = header.match(/\b20\d{2}\b/)?.[0];
+  const jakartaYear = Number(
+    new Intl.DateTimeFormat("en", { timeZone: "Asia/Jakarta", year: "numeric" }).format(new Date()),
+  );
+  return `${month || "Periode berjalan"}${month ? ` ${explicitYear || jakartaYear}` : ""}`;
+}
+
+async function fetchFinanceSummary(): Promise<FinanceSummary | null> {
+  try {
+    const response = await fetch(FINANCE_SHEET_CSV, {
+      headers: { accept: "text/csv" },
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!response.ok) return null;
+
+    const rows = parseCsv(await response.text());
+    const findAmount = (label: string) => {
+      const row = rows.find((cells) => cells.some((cell) => cell.toUpperCase().includes(label)));
+      if (!row) return null;
+      const labelIndex = row.findIndex((cell) => cell.toUpperCase().includes(label));
+      return row.slice(labelIndex + 1).map(parseRupiah).find((amount) => amount !== null) ?? null;
+    };
+    const income = findAmount("JUMLAH PEMASUKAN");
+    const expense = findAmount("JUMLAH PENGELUARAN");
+    const balanceRow = rows.find((cells) => cells.some((cell) => cell.trim().toUpperCase() === "SALDO"));
+    const balanceLabelIndex = balanceRow?.findIndex((cell) => cell.trim().toUpperCase() === "SALDO") ?? -1;
+    const balance = balanceRow && balanceLabelIndex >= 0
+      ? balanceRow.slice(balanceLabelIndex + 1).map(parseRupiah).find((amount) => amount !== null) ?? null
+      : null;
+
+    if (income === null || expense === null || balance === null || income - expense !== balance) return null;
+    return { period: financePeriod(rows), income, expense, balance };
+  } catch {
+    return null;
+  }
+}
 
 function json(data: unknown, status = 200, extraHeaders: HeadersInit = {}) {
   return new Response(JSON.stringify(data), {
@@ -150,7 +252,7 @@ function parseTimingUpdates(text: string, minimum: number, maximum: number, allo
   const updates: Record<string, number> = {};
   const invalid: string[] = [];
   for (const line of text.split(/[\n,;]+/).map((part) => part.trim()).filter(Boolean)) {
-    const match = line.match(/^([A-Za-z']+)\s*[:=\-]?\s*(\d{1,3})(?:\s*menit)?$/i);
+    const match = line.match(/^([A-Za-z']+)\s*[:=-]?\s*(\d{1,3})(?:\s*menit)?$/i);
     const prayer = match ? normalizePrayerName(match[1]) : null;
     const minutes = match ? Number(match[2]) : Number.NaN;
     if (!prayer || !allowedNames.includes(prayer) || !Number.isInteger(minutes) || minutes < minimum || minutes > maximum) {
@@ -339,11 +441,12 @@ async function getSession(env: Env, userId: number) {
 }
 
 async function listContent(env: Env, chatId: number) {
-  const [slides, ticker, timings, friday] = await Promise.all([
+  const [slides, ticker, tickerEnabled, timings, friday] = await Promise.all([
     env.DB.prepare(
       "SELECT id, kind, title, youtube_id FROM slides WHERE active = 1 ORDER BY sort_order, id",
     ).all<{ id: number; kind: string; title: string | null; youtube_id: string | null }>(),
     env.DB.prepare("SELECT value FROM settings WHERE key = 'ticker'").first<{ value: string }>(),
+    env.DB.prepare("SELECT value FROM settings WHERE key = 'ticker_enabled'").first<{ value: string }>(),
     getTimingSettings(env),
     getFridaySettings(env),
   ]);
@@ -360,7 +463,7 @@ async function listContent(env: Env, chatId: number) {
   await sendMessage(
     env,
     chatId,
-    `<b>Konten layar</b>\n${slideText}\n\n<b>Info berjalan</b>\n${ticker?.value || "Tidak ditampilkan"}\n\n<b>Jeda iqomah</b>\n${formatTimingMap(timings.iqamahDelays)}\n\n<b>Durasi mode sholat</b>\n${formatTimingMap(timings.prayerDurations, PRAYER_DURATION_NAMES)}\n\n<b>Mode Jumat</b>\n${formatFridaySettings(friday)}\n\nUntuk menghapus slide, kirim <code>/hapus ID</code>.`,
+    `<b>Konten layar</b>\n${slideText}\n\n<b>Info berjalan</b>\nStatus: ${tickerEnabled?.value === "false" ? "Disembunyikan" : "Ditampilkan"}\n${ticker?.value || "Belum ada teks info"}\n\n<b>Jeda iqomah</b>\n${formatTimingMap(timings.iqamahDelays)}\n\n<b>Durasi mode sholat</b>\n${formatTimingMap(timings.prayerDurations, PRAYER_DURATION_NAMES)}\n\n<b>Mode Jumat</b>\n${formatFridaySettings(friday)}\n\nUntuk menghapus slide, kirim <code>/hapus ID</code>.`,
   );
 }
 
@@ -452,13 +555,18 @@ async function saveTicker(env: Env, message: TelegramMessage, userId: number, te
     return;
   }
 
-  await env.DB.prepare(
-    `INSERT INTO settings(key, value, updated_at)
-     VALUES ('ticker', ?1, CURRENT_TIMESTAMP)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`,
-  )
-    .bind(value)
-    .run();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO settings(key, value, updated_at)
+       VALUES ('ticker', ?1, CURRENT_TIMESTAMP)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`,
+    ).bind(value),
+    env.DB.prepare(
+      `INSERT INTO settings(key, value, updated_at)
+       VALUES ('ticker_enabled', 'true', CURRENT_TIMESTAMP)
+       ON CONFLICT(key) DO UPDATE SET value = 'true', updated_at = CURRENT_TIMESTAMP`,
+    ),
+  ]);
   await clearSession(env, userId);
   await sendMessage(env, message.chat.id, "✅ Info berjalan sudah diperbarui.");
 }
@@ -466,11 +574,26 @@ async function saveTicker(env: Env, message: TelegramMessage, userId: number, te
 async function clearTicker(env: Env, chatId: number, userId: number) {
   await env.DB.prepare(
     `INSERT INTO settings(key, value, updated_at)
-     VALUES ('ticker', '', CURRENT_TIMESTAMP)
-     ON CONFLICT(key) DO UPDATE SET value = '', updated_at = CURRENT_TIMESTAMP`,
+     VALUES ('ticker_enabled', 'false', CURRENT_TIMESTAMP)
+     ON CONFLICT(key) DO UPDATE SET value = 'false', updated_at = CURRENT_TIMESTAMP`,
   ).run();
   await clearSession(env, userId);
   await sendMessage(env, chatId, "✅ Info bagian bawah sudah disembunyikan.");
+}
+
+async function showTicker(env: Env, chatId: number, userId: number) {
+  const ticker = await env.DB.prepare("SELECT value FROM settings WHERE key = 'ticker'").first<{ value: string }>();
+  await clearSession(env, userId);
+  if (!ticker?.value.trim()) {
+    await sendMessage(env, chatId, "Belum ada teks info tersimpan. Pilih <b>📢 Ubah info TV</b> terlebih dahulu.");
+    return;
+  }
+  await env.DB.prepare(
+    `INSERT INTO settings(key, value, updated_at)
+     VALUES ('ticker_enabled', 'true', CURRENT_TIMESTAMP)
+     ON CONFLICT(key) DO UPDATE SET value = 'true', updated_at = CURRENT_TIMESTAMP`,
+  ).run();
+  await sendMessage(env, chatId, "✅ Info bagian bawah sudah ditampilkan kembali.");
 }
 
 async function promptTimingSetting(
@@ -697,8 +820,13 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate) {
     return;
   }
 
-  if (text === "🧹 Sembunyikan info" || text === "/hapusinfo") {
+  if (text === "🙈 Sembunyikan info" || text === "🧹 Sembunyikan info" || text === "/hapusinfo" || text === "/sembunyikaninfo") {
     await clearTicker(env, message.chat.id, user.id);
+    return;
+  }
+
+  if (text === "👁 Tampilkan info" || text === "/tampilkaninfo") {
+    await showTicker(env, message.chat.id, user.id);
     return;
   }
 
@@ -780,7 +908,7 @@ async function handleTelegramUpdate(env: Env, update: TelegramUpdate) {
 
 async function publicDisplay(env: Env, request: Request) {
   const url = new URL(request.url);
-  const [slides, settings] = await Promise.all([
+  const [slides, settings, finance] = await Promise.all([
     env.DB.prepare(
       `SELECT id, kind, title, media_key, youtube_id, duration_seconds
        FROM slides WHERE active = 1 ORDER BY sort_order, id`,
@@ -793,12 +921,13 @@ async function publicDisplay(env: Env, request: Request) {
       duration_seconds: number;
     }>(),
     env.DB.prepare(
-      "SELECT key, value, updated_at FROM settings WHERE key IN ('ticker', 'iqamah_delays', 'prayer_durations', 'friday_settings')",
+      "SELECT key, value, updated_at FROM settings WHERE key IN ('ticker', 'ticker_enabled', 'iqamah_delays', 'prayer_durations', 'friday_settings')",
     ).all<{
       key: string;
       value: string;
       updated_at: string;
     }>(),
+    fetchFinanceSummary(),
   ]);
   const settingValues = Object.fromEntries(settings.results.map((row) => [row.key, row.value]));
   const updatedAt = settings.results
@@ -816,7 +945,9 @@ async function publicDisplay(env: Env, request: Request) {
         youtubeId: slide.youtube_id,
         durationSeconds: slide.duration_seconds,
       })),
-      ticker: settingValues.ticker || null,
+      ticker: settingValues.ticker_enabled === "false" ? null : settingValues.ticker || null,
+      tickerEnabled: settingValues.ticker_enabled !== "false",
+      finance,
       iqamahDelays: parseTimingSetting(settingValues.iqamah_delays, DEFAULT_IQAMAH_DELAYS),
       prayerDurations: parseTimingSetting(settingValues.prayer_durations, DEFAULT_PRAYER_DURATIONS),
       friday: parseFridaySettings(settingValues.friday_settings),

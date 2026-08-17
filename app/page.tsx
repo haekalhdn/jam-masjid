@@ -6,7 +6,7 @@ const TIME_ZONE = "Asia/Jakarta";
 const SCHEDULE_API = "https://www.muslimkita.id/api/jadwal-sholat/v1/depok/";
 const SCHEDULE_CACHE_KEY = "jadwal-sholat-depok";
 const CONTENT_API = "https://jam-masjid-bot.alhidayah-sawangan.workers.dev/api/display";
-const APP_VERSION = "2026.08.08.13";
+const APP_VERSION = "2026.08.17.2";
 const UPDATE_ATTEMPT_KEY = "jam-masjid-update-attempt";
 
 type PrayerName = "Subuh" | "Dzuhur" | "Ashar" | "Maghrib" | "Isya";
@@ -15,6 +15,7 @@ type PrayerDurationMap = TimingMap & { Jumat: number };
 type Prayer = { name: PrayerName; adhan: string; iqamah: string };
 type DailyTimes = { imsak: string; syuruk: string };
 type FridaySettings = { theme: string; khatib: string; imam: string };
+type FinanceSummary = { period: string; income: number; expense: number; balance: number };
 type ContentSlide = {
   id: number;
   kind: "poster" | "youtube";
@@ -24,7 +25,8 @@ type ContentSlide = {
   durationSeconds: number;
 };
 type FridaySlide = FridaySettings & { id: "friday"; kind: "friday"; durationSeconds: number };
-type DisplaySlide = ContentSlide | FridaySlide;
+type FinanceSlide = FinanceSummary & { id: "finance"; kind: "finance"; durationSeconds: number };
+type DisplaySlide = ContentSlide | FridaySlide | FinanceSlide;
 type YouTubePlayerInstance = {
   destroy: () => void;
   mute: () => void;
@@ -256,12 +258,35 @@ const dateFormatter = new Intl.DateTimeFormat("id-ID", {
   year: "numeric",
 });
 
-const hijriFormatter = new Intl.DateTimeFormat("id-ID-u-ca-islamic", {
+const hijriFormatter = new Intl.DateTimeFormat("id-ID-u-ca-islamic-umalqura", {
   timeZone: TIME_ZONE,
   day: "numeric",
   month: "long",
   year: "numeric",
 });
+const KEMENAG_HIJRI_STARTS_2026 = [
+  { start: "2026-06-16", month: "Muharam", year: 1448 },
+  { start: "2026-07-15", month: "Safar", year: 1448 },
+  { start: "2026-08-14", month: "Rabiulawal", year: 1448 },
+  { start: "2026-09-13", month: "Rabiulakhir", year: 1448 },
+  { start: "2026-10-12", month: "Jumadilawal", year: 1448 },
+  { start: "2026-11-11", month: "Jumadilakhir", year: 1448 },
+  { start: "2026-12-10", month: "Rajab", year: 1448 },
+];
+
+function formatHijriDate(date: Date) {
+  const dateKey = dateKeyFormatter.format(date);
+  if (dateKey >= KEMENAG_HIJRI_STARTS_2026[0].start && dateKey <= "2026-12-31") {
+    const month = [...KEMENAG_HIJRI_STARTS_2026].reverse().find((item) => item.start <= dateKey);
+    if (month) {
+      const day = Math.round((Date.parse(`${dateKey}T00:00:00Z`) - Date.parse(`${month.start}T00:00:00Z`)) / 86400000) + 1;
+      return `${day} ${month.month} ${month.year} H`;
+    }
+  }
+  return hijriFormatter.format(date);
+}
+
+const rupiahFormatter = new Intl.NumberFormat("id-ID");
 
 const weekdayFormatter = new Intl.DateTimeFormat("id-ID", {
   timeZone: TIME_ZONE,
@@ -392,6 +417,7 @@ export default function Home() {
   const [prayerSchedule, setPrayerSchedule] = useState<Prayer[]>(FALLBACK_SCHEDULE);
   const [dailyTimes, setDailyTimes] = useState<DailyTimes>(FALLBACK_DAILY_TIMES);
   const [contentSlides, setContentSlides] = useState<ContentSlide[]>([]);
+  const [finance, setFinance] = useState<FinanceSummary | null>(null);
   const [ticker, setTicker] = useState("");
   const [prayerDurations, setPrayerDurations] = useState<PrayerDurationMap>(DEFAULT_PRAYER_DURATIONS);
   const [fridaySettings, setFridaySettings] = useState<FridaySettings>(DEFAULT_FRIDAY_SETTINGS);
@@ -409,9 +435,12 @@ export default function Home() {
       ...(fridayMode
         ? [{ id: "friday" as const, kind: "friday" as const, durationSeconds: 15, ...fridaySettings }]
         : []),
+      ...(finance
+        ? [{ id: "finance" as const, kind: "finance" as const, durationSeconds: 12, ...finance }]
+        : []),
       ...contentSlides,
     ],
-    [contentSlides, fridayMode, fridaySettings],
+    [contentSlides, finance, fridayMode, fridaySettings],
   );
 
   useEffect(() => {
@@ -458,6 +487,7 @@ export default function Home() {
           iqamahDelays?: Partial<TimingMap>;
           prayerDurations?: Partial<PrayerDurationMap>;
           friday?: Partial<FridaySettings>;
+          finance?: FinanceSummary | null;
         };
         if (cancelled) return;
         const nextSignature = JSON.stringify(data);
@@ -479,6 +509,7 @@ export default function Home() {
           })),
         );
         setContentSlides(Array.isArray(data.slides) ? data.slides : []);
+        setFinance(data.finance || null);
         setTicker(typeof data.ticker === "string" ? data.ticker.trim() : "");
         setActiveSlide(0);
       } catch {
@@ -738,7 +769,7 @@ export default function Home() {
           <div className="date-row">
             <p>{now ? dateFormatter.format(now) : "Memuat tanggal…"}</p>
             <span aria-hidden="true" />
-            <p>{now ? hijriFormatter.format(now) : "Memuat tanggal Hijriah…"}</p>
+            <p>{now ? formatHijriDate(now) : "Memuat tanggal Hijriah…"}</p>
           </div>
           <div className="daily-times" aria-label="Waktu Imsak dan Syuruk">
             <div className="daily-time">
@@ -751,6 +782,20 @@ export default function Home() {
               <strong>{dailyTimes.syuruk}</strong>
             </div>
           </div>
+          <aside className="donation-card" aria-label="Informasi infak dan shadaqah Masjid Al-Hidayah">
+            <div className="qris-frame">
+              <img className="qris-source" src="/qris-masjid.jpg" alt="QRIS Masjid Al-Hidayah 03" />
+            </div>
+            <div className="donation-details">
+              <p className="eyebrow">INFAK &amp; SHADAQAH</p>
+              <span>BSI • No. Rekening</span>
+              <strong>7173500098</strong>
+              <small>Masjid Al-Hidayah</small>
+              <span>Konfirmasi transfer</span>
+              <b>WA 0896 0147 2734</b>
+              <small>a.n. Ansori</small>
+            </div>
+          </aside>
         </div>
 
         <div
@@ -761,7 +806,7 @@ export default function Home() {
         >
           {displaySlides.map((slide, index) => (
             <div
-              className={`carousel-slide ${slide.kind === "poster" ? "poster-slide" : slide.kind === "youtube" ? "video-slide" : "friday-slide"}${activeSlide === index ? " active" : ""}`}
+              className={`carousel-slide ${slide.kind === "poster" ? "poster-slide" : slide.kind === "youtube" ? "video-slide" : slide.kind === "finance" ? "finance-slide" : "friday-slide"}${activeSlide === index ? " active" : ""}`}
               aria-hidden={activeSlide !== index}
               key={slide.id}
             >
@@ -774,6 +819,19 @@ export default function Home() {
                   <div className="friday-details">
                     <div><span>Khatib</span><strong>{slide.khatib}</strong></div>
                     <div><span>Imam</span><strong>{slide.imam}</strong></div>
+                  </div>
+                </>
+              ) : slide.kind === "finance" ? (
+                <>
+                  <div className="finance-heading">
+                    <p className="eyebrow">TRANSPARANSI KEUANGAN MASJID</p>
+                    <h2>Kas DKM • {slide.period}</h2>
+                    <p>Ringkasan dari laporan bendahara • diperbarui otomatis</p>
+                  </div>
+                  <div className="finance-metrics">
+                    <div className="finance-metric"><span>Pemasukan</span><strong>Rp{rupiahFormatter.format(slide.income)}</strong></div>
+                    <div className="finance-metric"><span>Pengeluaran</span><strong>Rp{rupiahFormatter.format(slide.expense)}</strong></div>
+                    <div className="finance-metric balance"><span>Saldo</span><strong>Rp{rupiahFormatter.format(slide.balance)}</strong></div>
                   </div>
                 </>
               ) : slide.kind === "poster" && slide.imageUrl ? (
